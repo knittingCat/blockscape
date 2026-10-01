@@ -22,7 +22,7 @@ When the site runs with its server (see below) three extra buttons appear:
 - **☁️ Save online** — save the diorama to your account. Choose *Only me* or *In my gallery*, and optionally require a **code** to open that diorama.
 - **🖼️ Gallery** — look at dioramas other signed-in people shared. A person can protect their whole gallery with a **gallery code**. While looking at someone else's diorama, 🚩 **Report** sends it to the admin.
 
-On the plain GitHub Pages copy there is no server, so these buttons stay hidden and everything else (building, pictures, share links, files) still works.
+The live site is https://blockscape.onrender.com. If the files are ever served without the server (for example `python3 -m http.server`), these buttons stay hidden and everything else (building, pictures, share links, files) still works.
 
 ### Admin (done in Neon, no in-app admin page)
 
