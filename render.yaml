@@ -1,0 +1,16 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: blockscape
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: node server/index.js
+    # no cookie => this check never touches the database, so Neon can sleep
+    healthCheckPath: /api/me
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: DATABASE_URL_POOLED
+        sync: false # paste the pooled connection string from Neon in the Render dashboard

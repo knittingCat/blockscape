@@ -30,6 +30,11 @@
       <button id="spin" title="Slowly spin the camera (R)">🔄 <span>Spin</span></button>
       <button id="resetView" title="Reset the camera">🎯 <span>Reset view</span></button>
     </div>
+    <div class="group" id="accountGroup">
+      <button id="accountBtn" hidden title="Sign in or see your dioramas">👤 <span>Sign in</span></button>
+      <button id="galleryBtn" hidden title="Look at dioramas other people shared">🖼️ <span>Gallery</span></button>
+      <button id="cloudBtn" hidden title="Save this diorama to your account">☁️ <span>Save online</span></button>
+    </div>
     <div class="group">
       <button id="newBtn" title="Start a new diorama">🆕 <span>New</span></button>
       <button id="saveBtn" title="Save to a file">💾 <span>Save</span></button>
@@ -41,7 +46,8 @@
   </header>
 
   <div id="banner" hidden>
-    <span>You're looking at a shared diorama. Your own diorama is safe.</span>
+    <span id="bannerText">You're looking at a shared diorama. Your own diorama is safe.</span>
+    <button id="reportBtn" hidden>🚩 Report</button>
     <button id="ownBtn">Open my own diorama</button>
   </div>
 
@@ -50,6 +56,8 @@
   <div id="toast" role="status"></div>
 
   <nav id="palette" aria-label="Blocks"></nav>
+
+  <dialog id="panel"><div id="panelBody"></div></dialog>
 
   <dialog id="labelDialog">
     <form method="dialog">

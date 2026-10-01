@@ -1,0 +1,217 @@
+// Runs the real server against throw-away tables (zz_test_*) in the Neon database from .env, then drops them.
+process.env.TABLE_PREFIX = 'zz_test_';
+import assert from 'node:assert/strict';
+
+const { createApp } = await import('../server/index.js');
+const { initDb, dropAll, query, T, pool } = await import('../server/db.js');
+
+await dropAll();
+await initDb();
+const server = createApp().listen(0);
+const base = `http://127.0.0.1:${server.address().port}`;
+
+let n = 0;
+const test = async (name, fn) => {
+  await fn();
+  n++;
+  console.log('ok -', name);
+};
+
+class Client {
+  constructor() {
+    this.cookie = '';
+  }
+  async call(method, path, body, { csrf = true } = {}) {
+    const headers = { 'content-type': 'application/json' };
+    if (csrf) headers['x-requested-with'] = 'blockscape';
+    if (this.cookie) headers.cookie = this.cookie;
+    const res = await fetch(base + path, { method, headers, body: body === undefined || method === 'GET' ? undefined : JSON.stringify(body) });
+    const set = res.headers.get('set-cookie');
+    if (set) this.cookie = set.split(';')[0].endsWith('=') ? '' : set.split(';')[0];
+    let json = null;
+    try {
+      json = await res.json();
+    } catch {}
+    return { status: res.status, json, headers: res.headers };
+  }
+}
+const DATA = 'zAAAAAAAAAAAAAAAAAAAAAA';
+
+try {
+  const ann = new Client();
+  const ben = new Client();
+  const cat = new Client();
+
+  await test('static site is served and server files are not', async () => {
+    assert.equal((await fetch(base + '/')).status, 200);
+    assert.equal((await fetch(base + '/style.css')).status, 200);
+    assert.equal((await fetch(base + '/src/world.js')).status, 200);
+    for (const p of ['/.env', '/server/index.js', '/package.json', '/src/../.env', '/server/db.js']) {
+      const r = await fetch(base + p);
+      assert.ok(r.status === 404 || r.status === 400, `${p} -> ${r.status}`);
+    }
+    const csp = (await fetch(base + '/')).headers.get('content-security-policy');
+    assert.match(csp, /script-src 'self' 'sha256-/);
+  });
+
+  await test('sign up validation and duplicates', async () => {
+    assert.equal((await ann.call('POST', '/api/signup', { username: 'a', password: 'longenough1' })).status, 400);
+    assert.equal((await ann.call('POST', '/api/signup', { username: 'ann', password: 'short' })).status, 400);
+    assert.equal((await ann.call('POST', '/api/signup', { username: 'admin', password: 'longenough1' })).status, 400);
+    const ok = await ann.call('POST', '/api/signup', { username: 'Ann', password: 'longenough1' });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.json.user.username, 'ann');
+    assert.equal((await new Client().call('POST', '/api/signup', { username: 'ANN', password: 'longenough1' })).status, 409);
+  });
+
+  await test('session cookie works, logout and login', async () => {
+    const me = await ann.call('GET', '/api/me');
+    assert.equal(me.json.user.username, 'ann');
+    assert.equal(me.json.user.isAdmin, false);
+    assert.equal((await new Client().call('GET', '/api/me')).json.user, null);
+    assert.equal((await ann.call('POST', '/api/logout', {})).status, 200);
+    assert.equal((await ann.call('GET', '/api/me')).json.user, null);
+    assert.equal((await ann.call('POST', '/api/login', { username: 'ann', password: 'wrong-password' })).status, 401);
+    assert.equal((await ann.call('POST', '/api/login', { username: 'nobody', password: 'wrong-password' })).status, 401);
+    assert.equal((await ann.call('POST', '/api/login', { username: 'ANN', password: 'longenough1' })).status, 200);
+    assert.equal((await ann.call('GET', '/api/me')).json.user.username, 'ann');
+  });
+
+  await test('passwords are stored hashed, tokens are stored hashed', async () => {
+    const { rows } = await query(`SELECT password_hash FROM ${T.users} WHERE username = 'ann'`);
+    assert.match(rows[0].password_hash, /^s1:[0-9a-f]+:[0-9a-f]+$/);
+    assert.ok(!rows[0].password_hash.includes('longenough1'));
+    const s = await query(`SELECT token_hash FROM ${T.sessions}`);
+    assert.ok(s.rows.every((r) => /^[0-9a-f]{64}$/.test(r.token_hash)));
+  });
+
+  await test('requests without the CSRF header are refused', async () => {
+    assert.equal((await ann.call('POST', '/api/logout', {}, { csrf: false })).status, 403);
+    assert.equal((await ann.call('GET', '/api/me')).json.user.username, 'ann'); // still signed in
+  });
+
+  await test('everything needs a session', async () => {
+    const anon = new Client();
+    for (const [m, p] of [['GET', '/api/gallery'], ['GET', '/api/dioramas/mine'], ['POST', '/api/dioramas'], ['GET', '/api/dioramas/1'], ['POST', '/api/report']]) {
+      assert.equal((await anon.call(m, p, {})).status, 401, `${m} ${p}`);
+    }
+  });
+
+  let privateId;
+  await test('save a private diorama; nobody else can see it', async () => {
+    assert.equal((await ann.call('POST', '/api/dioramas', { title: '', data: DATA, visibility: 'private' })).status, 400);
+    assert.equal((await ann.call('POST', '/api/dioramas', { title: 'x', data: '<script>', visibility: 'private' })).status, 400);
+    assert.equal((await ann.call('POST', '/api/dioramas', { title: 'x', data: DATA, visibility: 'public' })).status, 400);
+    assert.equal((await ann.call('POST', '/api/dioramas', { title: 'x', data: DATA, visibility: 'private', thumb: 'javascript:alert(1)' })).status, 400);
+    const made = await ann.call('POST', '/api/dioramas', { title: 'My secret', data: DATA, visibility: 'private' });
+    assert.equal(made.status, 200);
+    privateId = made.json.id;
+    assert.equal((await ben.call('POST', '/api/signup', { username: 'ben', password: 'longenough2' })).status, 200);
+    assert.equal((await ben.call('GET', `/api/dioramas/${privateId}`)).status, 404);
+    const mine = await ann.call('GET', '/api/dioramas/mine');
+    assert.equal(mine.json.dioramas.length, 1);
+    assert.equal((await ann.call('GET', `/api/dioramas/${privateId}`)).json.data, DATA);
+    const gal = await ben.call('GET', '/api/gallery');
+    assert.deepEqual(gal.json.recent, []);
+  });
+
+  let galleryId;
+  await test('publish to the gallery; other users can open it', async () => {
+    const made = await ann.call('POST', '/api/dioramas', { title: 'The Little House', data: DATA, visibility: 'gallery', thumb: 'data:image/jpeg;base64,AAAA' });
+    galleryId = made.json.id;
+    const gal = await ben.call('GET', '/api/gallery');
+    assert.equal(gal.json.members[0].username, 'ann');
+    assert.equal(gal.json.recent.length, 1);
+    assert.equal(gal.json.recent[0].locked, false);
+    const open = await ben.call('GET', `/api/dioramas/${galleryId}`);
+    assert.equal(open.status, 200);
+    assert.equal(open.json.owner, 'ann');
+    assert.equal(open.json.mine, false);
+    const user = await ben.call('GET', '/api/gallery/ann');
+    assert.equal(user.json.dioramas.length, 1);
+  });
+
+  await test('update only by the owner; limits on password-less edits', async () => {
+    assert.equal((await ben.call('POST', '/api/dioramas', { id: galleryId, title: 'hijack', data: DATA, visibility: 'gallery' })).status, 404);
+    assert.equal((await ann.call('POST', '/api/dioramas', { id: galleryId, title: 'The Little House v2', data: DATA, visibility: 'gallery' })).status, 200);
+    assert.equal((await ann.call('GET', `/api/dioramas/${galleryId}`)).json.title, 'The Little House v2');
+  });
+
+  await test('gallery code: locked until the right code is entered', async () => {
+    assert.equal((await ann.call('PUT', '/api/me/gallery-code', { code: 'ab' })).status, 400);
+    assert.equal((await ann.call('PUT', '/api/me/gallery-code', { code: 'sesame' })).json.hasGalleryCode, true);
+    const gal = await ben.call('GET', '/api/gallery');
+    assert.equal(gal.json.members[0].locked, true);
+    assert.equal(gal.json.recent[0].locked, true);
+    assert.equal(gal.json.recent[0].thumb, null);
+    const blocked = await ben.call('GET', `/api/dioramas/${galleryId}`);
+    assert.equal(blocked.status, 403);
+    assert.equal(blocked.json.locked, 'gallery');
+    const user = await ben.call('GET', '/api/gallery/ann');
+    assert.equal(user.json.locked, 'gallery');
+    assert.equal(user.json.dioramas, undefined);
+    const ownerId = blocked.json.ownerId;
+    assert.equal((await ben.call('POST', '/api/unlock', { kind: 'gallery', id: ownerId, code: 'nope' })).status, 403);
+    assert.equal((await ben.call('POST', '/api/unlock', { kind: 'gallery', id: ownerId, code: 'sesame' })).status, 200);
+    assert.equal((await ben.call('GET', `/api/dioramas/${galleryId}`)).status, 200);
+    assert.equal((await ann.call('GET', '/api/gallery/ann')).json.dioramas.length, 1); // owner never locked out
+  });
+
+  await test('changing the code locks people out again; clearing it opens the gallery', async () => {
+    await ann.call('PUT', '/api/me/gallery-code', { code: 'new-code' });
+    assert.equal((await ben.call('GET', `/api/dioramas/${galleryId}`)).status, 403);
+    await ann.call('PUT', '/api/me/gallery-code', { code: null });
+    assert.equal((await ben.call('GET', `/api/dioramas/${galleryId}`)).status, 200);
+  });
+
+  await test('diorama code works on one diorama only', async () => {
+    const coded = await ann.call('POST', '/api/dioramas', { title: 'Secret door', data: DATA, visibility: 'gallery', code: 'knock' });
+    const id = coded.json.id;
+    const r = await ben.call('GET', `/api/dioramas/${id}`);
+    assert.equal(r.status, 403);
+    assert.equal(r.json.locked, 'diorama');
+    const list = await ben.call('GET', '/api/gallery/ann');
+    const item = list.json.dioramas.find((d) => d.id === id);
+    assert.equal(item.locked, true);
+    assert.equal(list.json.dioramas.find((d) => d.id === galleryId).locked, false);
+    assert.equal((await ben.call('POST', '/api/unlock', { kind: 'diorama', id, code: 'bad' })).status, 403);
+    assert.equal((await ben.call('POST', '/api/unlock', { kind: 'diorama', id, code: 'knock' })).status, 200);
+    assert.equal((await ben.call('GET', `/api/dioramas/${id}`)).status, 200);
+    assert.equal((await ann.call('POST', '/api/dioramas', { id, title: 'Secret door', data: DATA, visibility: 'gallery', code: '' })).status, 200);
+  });
+
+  await test('reports', async () => {
+    assert.equal((await ben.call('POST', '/api/report', { dioramaId: galleryId, reason: '' })).status, 400);
+    assert.equal((await ben.call('POST', '/api/report', { dioramaId: galleryId, reason: 'Rude sign' })).status, 200);
+    assert.equal((await ben.call('POST', '/api/report', { dioramaId: galleryId, reason: 'Rude sign again' })).status, 200); // duplicate is ignored
+    assert.equal((await ann.call('POST', '/api/report', { dioramaId: galleryId, reason: 'mine' })).status, 400);
+    assert.equal((await ben.call('POST', '/api/report', { dioramaId: privateId, reason: 'x' })).status, 404); // can't even see private ones
+    const { rows } = await query(`SELECT reason FROM ${T.reports}`);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].reason, 'Rude sign');
+  });
+
+  await test('delete: owner yes, stranger no, admin yes', async () => {
+    assert.equal((await ben.call('DELETE', `/api/dioramas/${galleryId}`)).status, 403);
+    assert.equal((await cat.call('POST', '/api/signup', { username: 'cat_mod', password: 'longenough3' })).status, 200);
+    await query(`UPDATE ${T.users} SET is_admin = TRUE WHERE username = 'cat_mod'`);
+    assert.equal((await cat.call('GET', '/api/me')).json.user.isAdmin, true);
+    assert.equal((await cat.call('DELETE', `/api/dioramas/${galleryId}`)).status, 200);
+    assert.equal((await ann.call('GET', `/api/dioramas/${galleryId}`)).status, 404);
+    assert.equal((await ann.call('DELETE', `/api/dioramas/${privateId}`)).status, 200);
+    const left = await query(`SELECT COUNT(*)::int AS n FROM ${T.reports}`);
+    assert.equal(left.rows[0].n, 0); // reports go away with the diorama
+  });
+
+  await test('brute-force protection on login', async () => {
+    const attacker = new Client();
+    let last;
+    for (let i = 0; i < 17; i++) last = await attacker.call('POST', '/api/login', { username: 'ann', password: 'guess' + i });
+    assert.equal(last.status, 429);
+  });
+} finally {
+  server.close();
+  await dropAll();
+  await pool.end();
+}
+console.log(`${n} server tests passed`);

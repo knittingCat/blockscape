@@ -2,6 +2,7 @@ import { World, SIZES, encodeWorld, decodeWorld } from './world.js';
 import { BLOCKS, BLOCK_BY_ID } from './blocks.js';
 import { textureCanvas, topTextureName } from './textures.js';
 import { DioramaView } from './view.js';
+import { initAccount } from './account.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -58,6 +59,8 @@ let boxA = null;
 let sharedMode = false;
 let spinning = false;
 let hoverInfo = null;
+let cloud = null; // the saved-online diorama we are looking at, if any
+let accountApi = null;
 
 const stage = $('#stage');
 const toastEl = $('#toast');
@@ -138,13 +141,24 @@ function attachWorld(w) {
   updateStatus();
 }
 
-async function loadFromText(text, { shared = false } = {}) {
+function updateBanner(shared) {
+  const banner = $('#banner');
+  const viewingOthers = cloud && !cloud.mine;
+  banner.hidden = !(shared || viewingOthers);
+  $('#bannerText').textContent = viewingOthers
+    ? `Looking at “${cloud.title}” by ${cloud.owner}. Your own diorama is safe.`
+    : "You're looking at a shared diorama. Your own diorama is safe.";
+  $('#reportBtn').hidden = !(viewingOthers && accountApi);
+}
+
+async function loadFromText(text, { shared = false, cloud: cloudInfo = null } = {}) {
   const w = await decodeWorld(text.trim());
   sharedMode = shared;
-  $('#banner').hidden = !shared;
+  cloud = cloudInfo;
   attachWorld(w);
   view.setWorld(w);
   setTool(tool);
+  updateBanner(shared);
 }
 
 // ---------- pointer handling ----------
@@ -368,7 +382,8 @@ function wireUI() {
     const dlg = $('#newDialog');
     if (dlg.returnValue !== 'ok') return;
     sharedMode = false;
-    $('#banner').hidden = true;
+    cloud = null;
+    updateBanner(false);
     history.replaceState(null, '', location.pathname + location.search);
     const w = makeScene(Number($('#newSize').value), $('#newKind').value);
     attachWorld(w);
@@ -423,6 +438,7 @@ function wireUI() {
   });
 
   $('#helpBtn').addEventListener('click', () => $('#helpDialog').showModal());
+  $('#reportBtn').addEventListener('click', () => cloud && accountApi && accountApi.report(cloud.id, cloud.title));
   $('#ownBtn').addEventListener('click', async () => {
     history.replaceState(null, '', location.pathname + location.search);
     await loadStart(false);
@@ -496,6 +512,18 @@ async function main() {
   selectBlock(1);
   setTool('build');
   await loadStart(true);
+  accountApi = await initAccount({
+    getWorld: () => world,
+    loadScene: loadFromText,
+    makeThumb: () => view.snapshot(320, 200).toDataURL('image/jpeg', 0.72),
+    toast,
+    getCloud: () => cloud,
+    setCloud: (c) => {
+      cloud = c;
+      updateBanner(sharedMode);
+    },
+  });
+  updateBanner(sharedMode);
   if (!store.get('seen-help') && !location.search.includes('nohelp')) {
     store.set('seen-help', '1');
     $('#helpDialog').showModal();
