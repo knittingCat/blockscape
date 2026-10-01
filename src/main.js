@@ -524,9 +524,16 @@ async function main() {
     },
   });
   updateBanner(sharedMode);
+  const askToSignIn = () => {
+    // not when someone just opened a shared link: let them look first
+    if (accountApi && !location.hash.startsWith('#s=') && !location.search.includes('nosignin')) accountApi.promptIfSignedOut();
+  };
   if (!store.get('seen-help') && !location.search.includes('nohelp')) {
     store.set('seen-help', '1');
+    $('#helpDialog').addEventListener('close', askToSignIn, { once: true });
     $('#helpDialog').showModal();
+  } else {
+    askToSignIn();
   }
   window.blockscape = { get world() { return world; }, get view() { return view; }, setTool, selectBlock, loadFromText, composePicture };
 }

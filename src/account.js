@@ -39,7 +39,7 @@ export async function initAccount(ctx) {
   });
 
   // ---------- sign in / create account ----------
-  function authView({ mode = 'login', message = '', after = null } = {}) {
+  function authView({ mode = 'login', message = '', after = null, skippable = false } = {}) {
     const signup = mode === 'signup';
     const el = open(`
       <h2>${signup ? 'Create an account' : 'Sign in'}</h2>
@@ -54,14 +54,14 @@ export async function initAccount(ctx) {
         ${signup ? '<p class="hint">Use a made-up username, not your real name. 3–20 letters, numbers or underscores. Passwords need 8+ characters. There is no email, so write your password down — it can\'t be reset by email.</p>' : ''}
         <p class="error" id="authError" hidden></p>
         <div class="row">
-          <button type="button" data-act="close">Cancel</button>
+          <button type="button" data-act="close">${skippable ? 'Continue without an account' : 'Cancel'}</button>
           <button type="submit" class="primary">${signup ? 'Create account' : 'Sign in'}</button>
         </div>
       </form>
       <p class="hint center">${signup ? 'Already have an account?' : 'New here?'} <button type="button" class="link" data-act="switch">${signup ? 'Sign in' : 'Create an account'}</button></p>`);
     $('[name=username]', el).focus();
     $('[data-act=close]', el).onclick = close;
-    $('[data-act=switch]', el).onclick = () => authView({ mode: signup ? 'login' : 'signup', message, after });
+    $('[data-act=switch]', el).onclick = () => authView({ mode: signup ? 'login' : 'signup', message, after, skippable });
     $('#authForm', el).onsubmit = async (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
@@ -318,5 +318,15 @@ export async function initAccount(ctx) {
   galleryBtn.onclick = () => (user ? galleryView() : needSignIn('Sign in to see the gallery.', galleryView));
   cloudBtn.onclick = () => (user ? saveView() : needSignIn('Sign in to save your diorama online.', saveView));
 
-  return { report: (id, title) => (user ? reportView(id, title) : needSignIn('Sign in to send a report.', () => reportView(id, title))), isSignedIn: () => !!user };
+  // Asked once per browser tab when the site opens and nobody is signed in.
+  function promptIfSignedOut() {
+    try {
+      if (user || sessionStorage.getItem('bs-asked')) return;
+      sessionStorage.setItem('bs-asked', '1');
+    } catch {}
+    if (user) return;
+    authView({ mode: 'login', skippable: true, message: 'Sign in to save your dioramas online and see the class gallery — or skip this and just build.' });
+  }
+
+  return { promptIfSignedOut, report: (id, title) => (user ? reportView(id, title) : needSignIn('Sign in to send a report.', () => reportView(id, title))), isSignedIn: () => !!user };
 }
