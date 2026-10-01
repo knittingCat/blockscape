@@ -1,0 +1,174 @@
+// 16x16 pixel-art textures drawn with canvas (no image files). Deterministic per texture name.
+const N = 16;
+
+function rng(name) {
+  let h = 1779033703;
+  for (const ch of name) h = Math.imul(h ^ ch.charCodeAt(0), 3432918353);
+  let a = (h ^ (h >>> 16)) >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+const css = (c, a = 1) => `rgba(${clamp(c[0])},${clamp(c[1])},${clamp(c[2])},${a})`;
+const shade = (c, d) => [c[0] + d, c[1] + d, c[2] + d];
+
+function noise(ctx, rand, base, amp) {
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      ctx.fillStyle = css(shade(base, (rand() - 0.5) * amp));
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+}
+const px = (ctx, x, y, color, a = 1) => {
+  ctx.fillStyle = css(color, a);
+  ctx.fillRect(x, y, 1, 1);
+};
+const speckles = (ctx, rand, color, count, a = 1) => {
+  for (let i = 0; i < count; i++) px(ctx, Math.floor(rand() * N), Math.floor(rand() * N), color, a);
+};
+
+const PAINTERS = {
+  grassTop(ctx, r) {
+    noise(ctx, r, [92, 150, 52], 34);
+    speckles(ctx, r, [60, 120, 40], 14);
+  },
+  dirt(ctx, r) {
+    noise(ctx, r, [121, 85, 58], 28);
+    speckles(ctx, r, [90, 62, 42], 16);
+    speckles(ctx, r, [150, 112, 80], 8);
+  },
+  grassSide(ctx, r) {
+    PAINTERS.dirt(ctx, r);
+    for (let x = 0; x < N; x++) {
+      const depth = 3 + Math.floor(r() * 3);
+      for (let y = 0; y < depth; y++) px(ctx, x, y, shade([92, 150, 52], (r() - 0.5) * 34));
+    }
+  },
+  stone(ctx, r) {
+    noise(ctx, r, [125, 125, 128], 24);
+    speckles(ctx, r, [95, 95, 100], 14);
+  },
+  cobble(ctx, r) {
+    noise(ctx, r, [120, 120, 122], 26);
+    for (let i = 0; i < 9; i++) {
+      const x = Math.floor(r() * 12);
+      const y = Math.floor(r() * 12);
+      ctx.strokeStyle = css([70, 70, 74], 0.8);
+      ctx.strokeRect(x + 0.5, y + 0.5, 3 + Math.floor(r() * 3), 3 + Math.floor(r() * 3));
+    }
+  },
+  sand(ctx, r) {
+    noise(ctx, r, [219, 203, 142], 18);
+    speckles(ctx, r, [190, 172, 116], 10);
+  },
+  sandstone(ctx, r) {
+    noise(ctx, r, [218, 202, 146], 12);
+    for (const y of [4, 5, 11]) for (let x = 0; x < N; x++) px(ctx, x, y, [190, 172, 118], 0.9);
+  },
+  snow(ctx, r) {
+    noise(ctx, r, [244, 248, 252], 8);
+    speckles(ctx, r, [215, 228, 240], 8);
+  },
+  ice(ctx, r) {
+    noise(ctx, r, [150, 200, 235], 16);
+    for (let i = 0; i < 6; i++) px(ctx, Math.floor(r() * N), Math.floor(r() * N), [235, 248, 255]);
+  },
+  water(ctx, r) {
+    noise(ctx, r, [40, 100, 200], 14);
+    for (let i = 0; i < 12; i++) {
+      const x = Math.floor(r() * 13);
+      const y = Math.floor(r() * N);
+      for (let k = 0; k < 3; k++) px(ctx, x + k, y, [120, 170, 240], 0.7);
+    }
+  },
+  lava(ctx, r) {
+    noise(ctx, r, [230, 90, 20], 70);
+    speckles(ctx, r, [255, 220, 90], 22);
+    speckles(ctx, r, [150, 40, 10], 12);
+  },
+  logSide(ctx, r) {
+    noise(ctx, r, [102, 78, 48], 16);
+    for (let x = 0; x < N; x += 3) for (let y = 0; y < N; y++) px(ctx, x + Math.floor(r() * 2), y, [70, 52, 32], 0.7);
+  },
+  logTop(ctx, r) {
+    noise(ctx, r, [176, 140, 84], 14);
+    const rings = [[0, [102, 78, 48]], [3, [196, 160, 100]], [5, [150, 112, 66]]];
+    for (const [i, c] of rings) {
+      ctx.strokeStyle = css(c);
+      ctx.strokeRect(i + 0.5, i + 0.5, N - 1 - 2 * i, N - 1 - 2 * i);
+    }
+  },
+  planks(ctx, r) {
+    noise(ctx, r, [176, 140, 84], 16);
+    for (const y of [3, 7, 11, 15]) for (let x = 0; x < N; x++) px(ctx, x, y, [120, 90, 52]);
+    speckles(ctx, r, [150, 116, 66], 12);
+  },
+  leaves(ctx, r) {
+    noise(ctx, r, [52, 120, 40], 56);
+    speckles(ctx, r, [28, 82, 26], 22);
+  },
+  brick(ctx, r) {
+    ctx.fillStyle = css([190, 185, 175]);
+    ctx.fillRect(0, 0, N, N);
+    for (let row = 0; row < 4; row++) {
+      const off = row % 2 ? 4 : 0;
+      for (let col = -1; col < 3; col++) {
+        const x = col * 8 + off;
+        ctx.fillStyle = css(shade([160, 70, 55], (r() - 0.5) * 30));
+        ctx.fillRect(x + 1, row * 4 + 1, 7, 3);
+      }
+    }
+  },
+  glass(ctx, r) {
+    ctx.clearRect(0, 0, N, N);
+    ctx.fillStyle = css([200, 235, 245], 0.35);
+    ctx.fillRect(0, 0, N, N);
+    ctx.strokeStyle = css([235, 250, 255], 0.95);
+    ctx.strokeRect(0.5, 0.5, N - 1, N - 1);
+    for (let i = 0; i < 4; i++) px(ctx, 3 + i, 3 + i, [255, 255, 255], 0.9);
+  },
+  glowstone(ctx, r) {
+    noise(ctx, r, [250, 210, 110], 56);
+    speckles(ctx, r, [255, 250, 190], 18);
+    speckles(ctx, r, [190, 140, 60], 10);
+  },
+  gold(ctx, r) {
+    noise(ctx, r, [250, 220, 70], 26);
+    for (let i = 0; i < 6; i++) px(ctx, 2 + i, 2 + i, [255, 250, 190], 0.9);
+    speckles(ctx, r, [200, 160, 30], 10);
+  },
+  obsidian(ctx, r) {
+    noise(ctx, r, [28, 20, 44], 14);
+    speckles(ctx, r, [70, 40, 110], 14);
+  },
+};
+
+function paintWool(ctx, r, rgb) {
+  noise(ctx, r, rgb, 16);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if ((x + y) % 4 === 0) px(ctx, x, y, [0, 0, 0], 0.07);
+}
+
+const cache = new Map();
+// Returns a 16x16 <canvas> for a texture name (e.g. "stone" or "wool:236,236,236").
+export function textureCanvas(name) {
+  if (cache.has(name)) return cache.get(name);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = N;
+  const ctx = canvas.getContext('2d');
+  const r = rng(name);
+  if (name.startsWith('wool:')) paintWool(ctx, r, name.slice(5).split(',').map(Number));
+  else PAINTERS[name](ctx, r);
+  cache.set(name, canvas);
+  return canvas;
+}
+
+export function topTextureName(block) {
+  return typeof block.tex === 'string' ? block.tex : block.tex.top;
+}
