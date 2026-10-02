@@ -648,12 +648,12 @@ function wireUI() {
       deleteSelection();
     } else if (/^[1-9]$/.test(e.key)) {
       selectBlock(Number(e.key));
-    } else if (key === 'b') setTool('build');
+    } else if (key === 'p' || key === 'b') setTool('build'); // P = place blocks (B still works)
     else if (key === 'e') setTool('erase');
     else if (key === 'x') setTool('box');
     else if (key === 's') setTool('select');
     else if (key === 'c') copySelection();
-    else if (key === 'p') clip ? setTool('paste') : toast('Nothing to paste yet — use Select on an area first.');
+    else if (key === 'v') clip ? setTool('paste') : toast('Nothing to paste yet — use Select on an area first.');
     else if (key === 'q') rotateClip();
     else if (key === 'i') setTool('pick');
     else if (key === 't') setTool('label');
