@@ -229,8 +229,9 @@ export async function initAccount(ctx) {
         await api('POST', '/api/logout', {});
         await refreshMe();
         ctx.setCloud(null);
+        ctx.onSignedOut && ctx.onSignedOut(); // your diorama must not stay on screen
         ctx.statusChanged && ctx.statusChanged();
-        ctx.toast('Signed out.');
+        ctx.toast('Signed out. Your diorama is saved in your account.');
         close();
       };
       const setCode = async (code) => {
@@ -340,5 +341,5 @@ export async function initAccount(ctx) {
     }
   }
 
-  return { save, promptIfSignedOut, report: (id, title) => (user ? reportView(id, title) : needSignIn('Sign in to send a report.', () => reportView(id, title))), isSignedIn: () => !!user };
+  return { openGallery: galleryView, save, promptIfSignedOut, report: (id, title) => (user ? reportView(id, title) : needSignIn('Sign in to send a report.', () => reportView(id, title))), isSignedIn: () => !!user };
 }

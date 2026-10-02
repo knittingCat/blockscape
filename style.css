@@ -96,3 +96,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 #top button, #pasteBar button, #reportBtn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .4rem .55rem; }
 button svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 #accountBtn span:empty { display: none; }
+
+/* someone else's diorama: look around only */
+body.viewonly #top, body.viewonly #palette, body.viewonly #status, body.viewonly #pasteBar { display: none !important; }
+body.viewonly #stage canvas { cursor: grab; }

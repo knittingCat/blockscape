@@ -239,10 +239,22 @@ function updateBanner(shared) {
   const viewingOthers = cloud && !cloud.mine;
   banner.hidden = !(shared || viewingOthers);
   $('#bannerText').textContent = viewingOthers
-    ? `Looking at “${cloud.title}” by ${cloud.owner}. Your own diorama is safe.`
-    : "You're looking at a shared diorama. Your own diorama is safe.";
+    ? `Viewing “${cloud.title}” by ${cloud.owner} (view only). Drag to look around, scroll to zoom.`
+    : "You're viewing a shared diorama (view only). Drag to look around, scroll to zoom.";
   $('#reportBtn').hidden = !(viewingOthers && accountApi);
+  $('#backGalleryBtn').hidden = !(viewingOthers && accountApi);
+  // Someone else's diorama: no toolbar, no palette, no editing.
+  document.body.classList.toggle('viewonly', !banner.hidden);
+  if (!banner.hidden && view) {
+    view.showGhost(null);
+    view.showMirrorGhosts([]);
+    view.showRegion(null, null);
+    view.showSelection(null);
+    view.showFootprint(null);
+  }
 }
+
+const isViewOnly = () => document.body.classList.contains('viewonly');
 
 async function loadFromText(text, { shared = false, cloud: cloudInfo = null } = {}) {
   const w = await decodeWorld(text.trim());
@@ -274,7 +286,7 @@ function otherCells(cell) {
 
 function refreshHover(e) {
   if (e) hoverInfo = e;
-  if (!hoverInfo || !view) return;
+  if (!hoverInfo || !view || isViewOnly()) return;
   const { hit } = currentHit(hoverInfo);
   const erasing = tool === 'erase' || hoverInfo.shiftKey;
   const block = BLOCK_BY_ID.get(selected);
@@ -316,6 +328,7 @@ function refreshHover(e) {
 }
 
 async function actAt(e, button) {
+  if (isViewOnly()) return;
   const { ray, hit } = currentHit(e);
   const erasing = tool === 'erase' || button === 2 || e.shiftKey;
   if (erasing && !['box', 'select', 'paste'].includes(tool)) {
@@ -704,6 +717,7 @@ function wireUI() {
   });
 
   $('#helpBtn').addEventListener('click', () => $('#helpDialog').showModal());
+  $('#backGalleryBtn').addEventListener('click', () => accountApi && accountApi.openGallery());
   $('#reportBtn').addEventListener('click', () => cloud && accountApi && accountApi.report(cloud.id, cloud.title));
   $('#ownBtn').addEventListener('click', async () => {
     history.replaceState(null, '', location.pathname + location.search);
@@ -711,6 +725,7 @@ function wireUI() {
   });
 
   window.addEventListener('keydown', (e) => {
+    if (isViewOnly()) return;
     if (e.target.closest?.('input, textarea, select') || document.querySelector('dialog[open]')) return;
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
@@ -801,6 +816,25 @@ async function main() {
     makeThumb: () => view.snapshot(320, 200).toDataURL('image/jpeg', 0.72),
     toast,
     statusChanged: updateStatus,
+    onSignedOut: () => {
+      // Signing out takes your diorama away: forget the browser copy and start from a blank scene.
+      clearTimeout(cloudTimer);
+      clearTimeout(saveTimer);
+      store.set('scene', '');
+      store.set('shared', '');
+      store.set('cloud', '');
+      cloud = null;
+      cloudState = '';
+      localState = '';
+      sharedMode = false;
+      selection = null;
+      const fresh = makeScene(32, 'grass');
+      attachWorld(fresh);
+      view.setWorld(fresh);
+      view.showSelection(null);
+      setTool(tool);
+      updateBanner(false);
+    },
     saveNow: doCloudSave,
     getCloud: () => cloud,
     setCloud: (c) => {
