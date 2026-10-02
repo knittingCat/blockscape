@@ -65,6 +65,7 @@ let selection = null; // { a, b } finished selection
 let clip = null; // copied blocks (kept when you open another diorama)
 let lastTapKey = null; // touch: first tap previews the paste, second tap places it
 let cloud = null; // the saved-online diorama we are looking at, if any
+let localState = ''; // browser autosave: Saving… / Saved in this browser
 let cloudState = ''; // shown in the status line: Saving… / Saved / …
 let cloudTimer = null;
 let accountApi = null;
@@ -123,12 +124,21 @@ function setTool(t) {
   refreshHover();
 }
 
+// What to show about saving, so there is always some feedback.
+function saveSuffix() {
+  if (cloud && !cloud.mine) return 'viewing someone else\'s diorama (not saved)';
+  if (cloudState) return cloudState;
+  if (!accountApi) return localState;
+  if (!accountApi.isSignedIn()) return `${localState ? localState + ' · ' : ''}sign in to save to your account`;
+  return `${localState ? localState + ' · ' : ''}not on your account yet (press Save)`;
+}
+
 function updateStatus() {
   const names = { build: 'Build', erase: 'Erase', box: 'Box fill', pick: 'Pick', label: 'Sign', select: 'Select', paste: 'Paste' };
   let hint = tool === 'box' ? (boxA ? ' — click the opposite corner' : ' — click a first corner') : '';
   if (tool === 'select') hint = selA ? ' — click the opposite corner' : selection ? ' — copied — press Paste' : ' — click one corner of the area';
   if (tool === 'paste') hint = clip ? ` — ${clip.w}×${clip.h}×${clip.d} footprint: move it, then click to place` : '';
-  $('#status').textContent = `${world.count()} blocks · ${names[tool]}${hint} · ${BLOCK_BY_ID.get(selected).name}${cloudState ? ' · ' + cloudState : ''}`;
+  $('#status').textContent = `${world.count()} blocks · ${names[tool]}${hint} · ${BLOCK_BY_ID.get(selected).name}${saveSuffix() ? ' · ' + saveSuffix() : ''}`;
   $('#undo').disabled = !world.undoStack.length;
   $('#redo').disabled = !world.redoStack.length;
 }
@@ -137,11 +147,17 @@ function updateStatus() {
 let saveTimer;
 function scheduleSave() {
   scheduleCloudSave();
+  localState = 'Saving…';
+  updateStatus();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
       store.set(sharedMode ? 'shared' : 'scene', await encodeWorld(world));
-    } catch {}
+      localState = 'Saved in this browser';
+    } catch {
+      localState = 'Could not save in this browser';
+    }
+    updateStatus();
   }, 500);
 }
 
@@ -740,6 +756,7 @@ async function main() {
     loadScene: loadFromText,
     makeThumb: () => view.snapshot(320, 200).toDataURL('image/jpeg', 0.72),
     toast,
+    statusChanged: updateStatus,
     saveNow: doCloudSave,
     getCloud: () => cloud,
     setCloud: (c) => {

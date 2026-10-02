@@ -71,6 +71,7 @@ export async function initAccount(ctx) {
       try {
         await api('POST', signup ? '/api/signup' : '/api/login', { username: f.get('username'), password: f.get('password') });
         await refreshMe();
+        ctx.statusChanged && ctx.statusChanged();
         ctx.toast(`Hi ${user.username}!`);
         close();
         if (after) after();
@@ -228,6 +229,7 @@ export async function initAccount(ctx) {
         await api('POST', '/api/logout', {});
         await refreshMe();
         ctx.setCloud(null);
+        ctx.statusChanged && ctx.statusChanged();
         ctx.toast('Signed out.');
         close();
       };
