@@ -292,7 +292,8 @@ export function createApp() {
   app.get('/', send('index.html'));
   app.get('/index.html', send('index.html'));
   app.get('/style.css', send('style.css'));
-  app.use('/src', express.static(path.join(ROOT, 'src'), { dotfiles: 'deny', maxAge: '5m' }));
+  // no-cache = the browser re-checks (cheap ETag request) so a deploy shows up on the next refresh, not 5 minutes later
+  app.use('/src', express.static(path.join(ROOT, 'src'), { dotfiles: 'deny', etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
   app.use('/vendor', express.static(path.join(ROOT, 'vendor'), { dotfiles: 'deny', maxAge: '7d' }));
 
   app.use((err, req, res, next) => {
