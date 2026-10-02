@@ -4,7 +4,7 @@ import { textureCanvas, topTextureName } from './textures.js';
 import { DioramaView } from './view.js';
 import { initAccount } from './account.js';
 import { api } from './api.js';
-import { extract, rotate90, mirrorX, originFor, placement } from './clipboard.js';
+import { extract, rotate90, mirrorX, originFor, placement, symmetricCells } from './clipboard.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -65,6 +65,9 @@ let selection = null; // { a, b } finished selection
 let clip = null; // copied blocks (kept when you open another diorama)
 let lastTapKey = null; // touch: first tap previews the paste, second tap places it
 let cloud = null; // the saved-online diorama we are looking at, if any
+const SYMMETRY_MODES = ['off', 'x', 'z', 'xz'];
+const SYMMETRY_NAMES = { off: 'off', x: 'left-right', z: 'front-back', xz: 'both ways' };
+let symmetry = 'off'; // build symmetrically: every place/erase/box is repeated across the middle
 let localState = ''; // browser autosave: Saving… / Saved in this browser
 let cloudState = ''; // shown in the status line: Saving… / Saved / …
 let cloudTimer = null;
@@ -124,6 +127,19 @@ function setTool(t) {
   refreshHover();
 }
 
+// A cell and its mirror images, for symmetric building.
+const withSymmetry = (cells) => symmetricCells(cells, symmetry, world.size);
+
+function cycleSymmetry() {
+  symmetry = SYMMETRY_MODES[(SYMMETRY_MODES.indexOf(symmetry) + 1) % SYMMETRY_MODES.length];
+  view.showSymmetry(symmetry);
+  $('#symBtn').classList.toggle('active', symmetry !== 'off');
+  $('#symBtn').title = `Symmetric building: ${SYMMETRY_NAMES[symmetry]} (Y to change)`;
+  toast(symmetry === 'off' ? 'Symmetric building is off.' : `Symmetric building: ${SYMMETRY_NAMES[symmetry]}. Everything you place or remove is repeated on the other side of the blue line.`);
+  updateStatus();
+  refreshHover();
+}
+
 // What to show about saving, so there is always some feedback.
 function saveSuffix() {
   if (cloud && !cloud.mine) return 'viewing someone else\'s diorama (not saved)';
@@ -138,7 +154,7 @@ function updateStatus() {
   let hint = tool === 'box' ? (boxA ? ' — click the opposite corner' : ' — click a first corner') : '';
   if (tool === 'select') hint = selA ? ' — click the opposite corner' : selection ? ' — copied — press Paste' : ' — click one corner of the area';
   if (tool === 'paste') hint = clip ? ` — ${clip.w}×${clip.h}×${clip.d} footprint: move it, then click to place` : '';
-  $('#status').textContent = `${world.count()} blocks · ${names[tool]}${hint} · ${BLOCK_BY_ID.get(selected).name}${saveSuffix() ? ' · ' + saveSuffix() : ''}`;
+  $('#status').textContent = `${world.count()} blocks · ${names[tool]}${hint} · ${BLOCK_BY_ID.get(selected).name}${symmetry !== 'off' ? ' · symmetry: ' + SYMMETRY_NAMES[symmetry] : ''}${saveSuffix() ? ' · ' + saveSuffix() : ''}`;
   $('#undo').disabled = !world.undoStack.length;
   $('#redo').disabled = !world.redoStack.length;
 }
@@ -236,6 +252,7 @@ async function loadFromText(text, { shared = false, cloud: cloudInfo = null } = 
   view.setWorld(w);
   selection = null;
   view.showSelection(null);
+  view.showSymmetry(symmetry);
   clearTimeout(cloudTimer);
   cloudState = cloudInfo && cloudInfo.mine ? 'Saved' : '';
   if (!shared && cloudInfo) rememberCloud();
@@ -249,12 +266,19 @@ function currentHit(e) {
   return { ray, hit: world.raycast(ray.origin, ray.dir) };
 }
 
+// The mirror images of one cell (not including the cell itself).
+function otherCells(cell) {
+  const key = cell.join(',');
+  return withSymmetry([cell]).filter((c) => c.join(',') !== key);
+}
+
 function refreshHover(e) {
   if (e) hoverInfo = e;
   if (!hoverInfo || !view) return;
   const { hit } = currentHit(hoverInfo);
   const erasing = tool === 'erase' || hoverInfo.shiftKey;
   const block = BLOCK_BY_ID.get(selected);
+  view.showMirrorGhosts([]);
   if (tool === 'paste') {
     view.showGhost(null);
     if (!hit || !clip || !hit.prev) return view.showFootprint(null);
@@ -279,8 +303,11 @@ function refreshHover(e) {
     view.showGhost(hit.prev, { color: 0xffffff, opacity: 0.2 });
   } else if (erasing && !(tool === 'box' && !boxA && !hoverInfo.shiftKey)) {
     view.showGhost(hit.cell, { color: 0xff4d4d, opacity: 0.45, scale: 1.03 });
+    if (tool !== 'box' && hit.cell) view.showMirrorGhosts(otherCells(hit.cell), { color: 0xff4d4d, opacity: 0.45, scale: 1.03 });
   } else {
-    view.showGhost(hit.prev, { color: view.setGhostTint(block), opacity: block.alpha ? 0.4 : 0.55 });
+    const style = { color: view.setGhostTint(block), opacity: block.alpha ? 0.4 : 0.55 };
+    view.showGhost(hit.prev, style);
+    if (tool !== 'box' && hit.prev) view.showMirrorGhosts(otherCells(hit.prev), style);
   }
   if (tool === 'box' && boxA) {
     const target = erasing ? hit.cell : hit.prev;
@@ -363,7 +390,7 @@ async function actAt(e, button) {
       updateStatus();
       return;
     }
-    const cells = world.boxCells(boxA, target);
+    const cells = withSymmetry(world.boxCells(boxA, target));
     world.setMany(cells.map(([x, y, z]) => [x, y, z, erasing ? 0 : selected]));
     boxA = null;
     view.showRegion(null, null);
@@ -371,9 +398,9 @@ async function actAt(e, button) {
     return;
   }
   if (erasing) {
-    if (hit.cell) world.setMany([[...hit.cell, 0]]);
+    if (hit.cell) world.setMany(withSymmetry([hit.cell]).map(([x, y, z]) => [x, y, z, 0]));
   } else if (hit.prev) {
-    world.setMany([[...hit.prev, selected]]);
+    world.setMany(withSymmetry([hit.prev]).map(([x, y, z]) => [x, y, z, selected]));
   }
 }
 
@@ -390,7 +417,7 @@ function placeAtPointer(e) {
     return;
   }
   const { hit } = currentHit(hoverInfo);
-  if (hit && hit.prev) world.setMany([[hit.prev[0], hit.prev[1], hit.prev[2], selected]]);
+  if (hit && hit.prev) world.setMany(withSymmetry([hit.prev]).map(([x, y, z]) => [x, y, z, selected]));
   refreshHover();
 }
 
@@ -580,6 +607,7 @@ function wireUI() {
   $('#copyBtn').addEventListener('click', copySelection);
   $('#rotateBtn').addEventListener('click', rotateClip);
   $('#mirrorBtn').addEventListener('click', mirrorClip);
+  $('#symBtn').addEventListener('click', cycleSymmetry);
   $('#mirrorBtn2').addEventListener('click', mirrorClip);
   $('#cancelPasteBtn').addEventListener('click', () => setTool('build'));
   $$('[data-sky]').forEach((b) =>
@@ -703,6 +731,7 @@ function wireUI() {
     else if (key === 'v') clip ? setTool('paste') : toast('Nothing to paste yet — use Select on an area first.');
     else if (key === 'q') rotateClip();
     else if (key === 'm') mirrorClip();
+    else if (key === 'y') cycleSymmetry();
     else if (key === 'i') setTool('pick');
     else if (key === 't') setTool('label');
     else if (e.key === 'Escape') {

@@ -152,6 +152,14 @@ export class DioramaView {
     this.footprint.visible = false;
     this.helpers.add(this.selection, this.footprint);
 
+    // extra ghosts for the mirrored copies, and the two symmetry planes
+    this.mirrorGhosts = [];
+    this.planeX = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0x7c9cff, transparent: true, opacity: 0.14, depthWrite: false, side: THREE.DoubleSide }));
+    this.planeZ = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0x7c9cff, transparent: true, opacity: 0.14, depthWrite: false, side: THREE.DoubleSide }));
+    this.planeX.rotation.y = Math.PI / 2; // the plane x = centre
+    this.planeX.visible = this.planeZ.visible = false;
+    this.helpers.add(this.planeX, this.planeZ);
+
     this.region = new THREE.LineSegments(new THREE.EdgesGeometry(this.geometry), new THREE.LineBasicMaterial({ color: 0xffd23f }));
     this.region.visible = false;
     this.helpers.add(this.region);
@@ -292,6 +300,7 @@ export class DioramaView {
     this.rebuildLabels();
     this.setSky(world.meta.sky || 'day');
     this.resetCamera();
+    this.showSymmetry(this.symMode || 'off'); // planes follow the new stand size
     world.onChange((e) => {
       if (world !== this.world) return;
       if (e.type === 'cells') this.rebuild(new Set(e.changes.flatMap((c) => [c.from, c.to])));
@@ -394,6 +403,42 @@ export class DioramaView {
     this.ghost.material.color.set(color);
     this.ghost.material.opacity = opacity;
     this.ghost.visible = true;
+  }
+
+  // mode: 'off' | 'x' | 'z' | 'xz' - draws the mirror plane(s) through the middle of the stand
+  showSymmetry(mode) {
+    this.symMode = mode;
+    this.dirty = true;
+    const size = this.world.size;
+    const tall = 14;
+    this.planeX.visible = mode === 'x' || mode === 'xz';
+    this.planeZ.visible = mode === 'z' || mode === 'xz';
+    this.planeX.scale.set(size, tall, 1);
+    this.planeX.position.set(0, tall / 2, 0);
+    this.planeZ.scale.set(size, tall, 1);
+    this.planeZ.position.set(0, tall / 2, 0);
+  }
+
+  // Preview of the mirrored copies of the cell under the pointer.
+  showMirrorGhosts(cells, { color = 0xffffff, opacity = 0.35, scale = 1.002 } = {}) {
+    this.dirty = true;
+    const off = this.offset;
+    while (this.mirrorGhosts.length < cells.length) {
+      const g = new THREE.Mesh(this.geometry, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+      g.add(new THREE.LineSegments(new THREE.EdgesGeometry(this.geometry), new THREE.LineBasicMaterial({ color: 0x000000 })));
+      g.renderOrder = 5;
+      this.helpers.add(g);
+      this.mirrorGhosts.push(g);
+    }
+    this.mirrorGhosts.forEach((g, i) => {
+      const c = cells[i];
+      g.visible = !!c;
+      if (!c) return;
+      g.position.set(c[0] + 0.5 - off, c[1] + 0.5, c[2] + 0.5 - off);
+      g.scale.setScalar(scale);
+      g.material.color.set(color);
+      g.material.opacity = opacity;
+    });
   }
 
   showRegion(a, b) {

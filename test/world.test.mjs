@@ -125,7 +125,7 @@ await test('random scene survives a round trip', async () => {
   assert.deepEqual(back.cells, w.cells);
 });
 
-const { extract, rotate90, mirrorX, originFor, placement, normalizeBox } = await import('../src/clipboard.js');
+const { symmetricCells, extract, rotate90, mirrorX, originFor, placement, normalizeBox } = await import('../src/clipboard.js');
 
 await test('extract copies only blocks and labels inside the box', () => {
   const w = new World(16);
@@ -154,6 +154,19 @@ await test('rotate90 four times returns the original; dimensions swap', () => {
   assert.equal(key(r), key(clip));
   // every rotated cell stays inside the new box
   for (const [x, y, z] of r1.cells) assert.ok(x >= 0 && x < r1.w && y >= 0 && y < r1.h && z >= 0 && z < r1.d);
+});
+
+await test('symmetric building repeats cells across the middle, without duplicates', () => {
+  assert.deepEqual(symmetricCells([[2, 0, 3]], 'off', 8), [[2, 0, 3]]);
+  assert.deepEqual(symmetricCells([[2, 0, 3]], 'x', 8), [[2, 0, 3], [5, 0, 3]]);
+  assert.deepEqual(symmetricCells([[2, 0, 3]], 'z', 8), [[2, 0, 3], [2, 0, 4]]);
+  const four = symmetricCells([[2, 1, 3]], 'xz', 8);
+  assert.equal(four.length, 4);
+  assert.deepEqual(four.map((c) => c.join()).sort(), ['2,1,3', '2,1,4', '5,1,3', '5,1,4']);
+  // cells already symmetric: no duplicates
+  assert.equal(symmetricCells([[2, 0, 0], [5, 0, 0]], 'x', 8).length, 2);
+  // mirrored cells stay inside the world
+  for (const [x, , z] of symmetricCells([[0, 0, 0], [7, 0, 7]], 'xz', 8)) assert.ok(x >= 0 && x < 8 && z >= 0 && z < 8);
 });
 
 await test('mirrorX flips left-right, twice is the original, size unchanged', () => {

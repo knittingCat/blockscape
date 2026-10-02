@@ -64,3 +64,18 @@ export function placement(world, clip, origin) {
   const labels = clip.labels.map((l) => ({ x: origin[0] + l.dx, y: origin[1] + l.dy, z: origin[2] + l.dz, text: l.text }));
   return { fits, cells, labels };
 }
+
+// Symmetric building: repeat cells across the middle of the diorama.
+// mode: 'off' | 'x' (left-right) | 'z' (front-back) | 'xz' (both). Returns de-duplicated [x, y, z] cells.
+export function symmetricCells(cells, mode, size) {
+  if (mode === 'off') return cells;
+  const seen = new Map();
+  const add = (x, y, z) => seen.set(`${x},${y},${z}`, [x, y, z]);
+  for (const [x, y, z] of cells) {
+    add(x, y, z);
+    if (mode.includes('x')) add(size - 1 - x, y, z);
+    if (mode.includes('z')) add(x, y, size - 1 - z);
+    if (mode === 'xz') add(size - 1 - x, y, size - 1 - z);
+  }
+  return [...seen.values()];
+}
