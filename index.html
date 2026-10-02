@@ -21,6 +21,7 @@
       <button aria-label="Sign" data-tool="label" title="Add a text sign (T)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></button>
       <button aria-label="Copy" id="copyBtn" title="Copy the selected area again (C or Cmd/Ctrl+C) — selecting already copies it"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
       <button aria-label="Paste" data-tool="paste" title="Paste: choose the footprint, then click to place it (V or Cmd/Ctrl+V)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button>
+      <button aria-label="Mirror" id="mirrorBtn" title="Mirror the copied structure left-to-right (M)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/><path d="M12 20v2"/><path d="M12 14v2"/><path d="M12 8v2"/><path d="M12 2v2"/></svg></button>
     </div>
     <div class="group">
       <button aria-label="Undo" id="undo" title="Undo (Cmd/Ctrl+Z)"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></button>
@@ -57,6 +58,7 @@
   <div id="pasteBar" hidden>
     <span>Choose the footprint, then click to place it</span>
     <button id="rotateBtn" aria-label="Rotate" title="Turn it 90 degrees (Q)"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+    <button id="mirrorBtn2" aria-label="Mirror" title="Mirror left-to-right (M)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/><path d="M12 20v2"/><path d="M12 14v2"/><path d="M12 8v2"/><path d="M12 2v2"/></svg></button>
     <button id="cancelPasteBtn" aria-label="Done" title="Done pasting (Esc)"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></button>
   </div>
   <div id="status" aria-live="polite"></div>
@@ -108,13 +110,13 @@
     <form method="dialog">
       <h2>How to build</h2>
       <ul class="help">
-        <li><b>The toolbar uses icons:</b> hold the pointer over one to see its name. In order: Build, Erase, Select, Box, Pick, Sign, Copy, Paste, Undo, Redo, Day, Sunset, Night, Account, Gallery, New, Save, Open file, Share link, Picture, Help.</li>
+        <li><b>The toolbar uses icons:</b> hold the pointer over one to see its name. In order: Build, Erase, Select, Box, Pick, Sign, Copy, Paste, Mirror, Undo, Redo, Day, Sunset, Night, Account, Gallery, New, Save, Open file, Share link, Picture, Help.</li>
         <li><b>Look around:</b> drag to rotate, scroll or pinch to zoom, right-drag (or two fingers) to move.</li>
         <li><b>Place a block:</b> pick one below, then click the ground or another block.</li>
         <li><b>Remove a block:</b> right-click it, or hold Shift and click. (The Erase tool does the same.)</li>
         <li><b>Build fast:</b> Box fills a whole area — click one corner, then the opposite corner. Hold Shift on the second click to clear a box.</li>
         <li><b>Copy a block:</b> Pick takes the block you click on.</li>
-        <li><b>Copy and paste:</b> Select — click one corner, then the opposite corner; it is copied automatically. Then Paste: a green footprint follows your pointer — move it where you want, click to place it, Rotate (or Q) to turn it. Click Done or press Esc when finished. With an area selected, press <b>Delete</b> to remove everything in it.</li>
+        <li><b>Copy and paste:</b> Select — click one corner, then the opposite corner; it is copied automatically. Then Paste: a green footprint follows your pointer — move it where you want, click to place it, Rotate (or Q) to turn it and Mirror (or M) to flip it left-to-right. Click Done or press Esc when finished. With an area selected, press <b>Delete</b> to remove everything in it.</li>
         <li><b>Name things:</b> Sign puts floating text in your scene.</li>
         <li><b>Mistake?</b> Cmd/Ctrl+Z undoes it.</li>
         <li><b>Share it:</b> Picture saves a PNG you can attach to a post. Share link copies a link so classmates can walk around your scene.</li>

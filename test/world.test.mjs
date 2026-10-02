@@ -125,7 +125,7 @@ await test('random scene survives a round trip', async () => {
   assert.deepEqual(back.cells, w.cells);
 });
 
-const { extract, rotate90, originFor, placement, normalizeBox } = await import('../src/clipboard.js');
+const { extract, rotate90, mirrorX, originFor, placement, normalizeBox } = await import('../src/clipboard.js');
 
 await test('extract copies only blocks and labels inside the box', () => {
   const w = new World(16);
@@ -154,6 +154,21 @@ await test('rotate90 four times returns the original; dimensions swap', () => {
   assert.equal(key(r), key(clip));
   // every rotated cell stays inside the new box
   for (const [x, y, z] of r1.cells) assert.ok(x >= 0 && x < r1.w && y >= 0 && y < r1.h && z >= 0 && z < r1.d);
+});
+
+await test('mirrorX flips left-right, twice is the original, size unchanged', () => {
+  const w = new World(16);
+  w.setMany([[0, 0, 0, 1], [3, 1, 2, 2]]);
+  w.addLabel(0, 1, 1, 'left');
+  const clip = extract(w, [0, 0, 0], [3, 1, 2]);
+  const m = mirrorX(clip);
+  assert.deepEqual([m.w, m.h, m.d], [clip.w, clip.h, clip.d]);
+  assert.ok(m.cells.some(([x, y, z, id]) => x === 3 && y === 0 && z === 0 && id === 1));
+  assert.ok(m.cells.some(([x, y, z, id]) => x === 0 && y === 1 && z === 2 && id === 2));
+  assert.equal(m.labels[0].dx, 3);
+  const back = mirrorX(m);
+  const key = (c) => JSON.stringify([c.w, c.h, c.d, [...c.cells].sort(), c.labels]);
+  assert.equal(key(back), key(clip));
 });
 
 await test('paste: placement, fit check, one undo step including labels', () => {

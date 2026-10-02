@@ -4,7 +4,7 @@ import { textureCanvas, topTextureName } from './textures.js';
 import { DioramaView } from './view.js';
 import { initAccount } from './account.js';
 import { api } from './api.js';
-import { extract, rotate90, originFor, placement } from './clipboard.js';
+import { extract, rotate90, mirrorX, originFor, placement } from './clipboard.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -409,6 +409,17 @@ function deleteSelection() {
   return true;
 }
 
+function mirrorClip() {
+  if (!clip) {
+    toast('Nothing to mirror yet — use Select on an area first.');
+    return;
+  }
+  clip = mirrorX(clip);
+  if (tool !== 'paste') setTool('paste'); // show the footprint so the flip is visible
+  updateStatus();
+  refreshHover();
+}
+
 function rotateClip() {
   if (!clip) return;
   clip = rotate90(clip);
@@ -552,6 +563,8 @@ function wireUI() {
   );
   $('#copyBtn').addEventListener('click', copySelection);
   $('#rotateBtn').addEventListener('click', rotateClip);
+  $('#mirrorBtn').addEventListener('click', mirrorClip);
+  $('#mirrorBtn2').addEventListener('click', mirrorClip);
   $('#cancelPasteBtn').addEventListener('click', () => setTool('build'));
   $$('[data-sky]').forEach((b) =>
     b.addEventListener('click', () => {
@@ -673,6 +686,7 @@ function wireUI() {
     else if (key === 'p') placeAtPointer(e);
     else if (key === 'v') clip ? setTool('paste') : toast('Nothing to paste yet — use Select on an area first.');
     else if (key === 'q') rotateClip();
+    else if (key === 'm') mirrorClip();
     else if (key === 'i') setTool('pick');
     else if (key === 't') setTool('label');
     else if (e.key === 'Escape') {

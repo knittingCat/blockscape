@@ -39,6 +39,17 @@ export function rotate90(clip) {
   };
 }
 
+// Flip the clip left-to-right (a mirror image).
+export function mirrorX(clip) {
+  return {
+    w: clip.w,
+    h: clip.h,
+    d: clip.d,
+    cells: clip.cells.map(([x, y, z, id]) => [clip.w - 1 - x, y, z, id]),
+    labels: clip.labels.map((l) => ({ dx: clip.w - 1 - l.dx, dy: l.dy, dz: l.dz, text: l.text })),
+  };
+}
+
 // Where the clip's corner goes when the user points at a cell: centre it on the cell, bottom layer at that height.
 export function originFor(clip, cell) {
   return [cell[0] - Math.floor(clip.w / 2), cell[1], cell[2] - Math.floor(clip.d / 2)];
