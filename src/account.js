@@ -23,9 +23,10 @@ export async function initAccount(ctx) {
   await refreshMe();
 
   // ---------- panel helpers ----------
-  function open(html, { wide = false } = {}) {
+  function open(html, { wide = false, full = false } = {}) {
     body.innerHTML = html;
     panel.classList.toggle('wide', wide);
+    panel.classList.toggle('full', full);
     if (!panel.open) panel.showModal();
     return body;
   }
@@ -35,13 +36,14 @@ export async function initAccount(ctx) {
     el.hidden = false;
   };
   panel.addEventListener('click', (e) => {
-    if (e.target === panel) close(); // click on the backdrop
+    if (e.target === panel && !panel.classList.contains('full')) close(); // click on the backdrop
   });
 
   // ---------- sign in / create account ----------
   function authView({ mode = 'login', message = '', after = null, skippable = false } = {}) {
     const signup = mode === 'signup';
     const el = open(`
+      <div class="authbrand">🧱 Blockscape</div>
       <h2>${signup ? 'Create an account' : 'Sign in'}</h2>
       ${message ? `<p class="hint">${esc(message)}</p>` : ''}
       <form id="authForm" autocomplete="on">
@@ -58,7 +60,7 @@ export async function initAccount(ctx) {
           <button type="submit" class="primary">${signup ? 'Create account' : 'Sign in'}</button>
         </div>
       </form>
-      <p class="hint center">${signup ? 'Already have an account?' : 'New here?'} <button type="button" class="link" data-act="switch">${signup ? 'Sign in' : 'Create an account'}</button></p>`);
+      <p class="hint center">${signup ? 'Already have an account?' : 'New here?'} <button type="button" class="link" data-act="switch">${signup ? 'Sign in' : 'Create an account'}</button></p>`, { full: true });
     $('[name=username]', el).focus();
     $('[data-act=close]', el).onclick = close;
     $('[data-act=switch]', el).onclick = () => authView({ mode: signup ? 'login' : 'signup', message, after, skippable });

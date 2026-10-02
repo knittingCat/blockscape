@@ -79,3 +79,13 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 .inlineform { display: flex; gap: .4rem; flex-wrap: wrap; }
 .inlineform input { flex: 1; min-width: 12rem; }
 #reportBtn { background: #5a2a2a; border-color: #8a4a4a; }
+
+/* full-page sign-in */
+#panel.full { width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; border: 0; border-radius: 0; background: var(--bg); padding: 1rem; }
+#panel.full[open] { display: flex; align-items: center; justify-content: center; }
+#panel.full #panelBody { width: min(420px, 100%); text-align: center; }
+#panel.full #panelBody label { text-align: left; }
+#panel.full #panelBody .row { justify-content: center; }
+#panel.full #panelBody .hint { text-align: center; }
+#panel.full h2 { font-size: 1.6rem; margin-bottom: .8rem; }
+.authbrand { font-size: 2.2rem; font-weight: 800; margin-bottom: .4rem; }
