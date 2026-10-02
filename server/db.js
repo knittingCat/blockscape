@@ -69,6 +69,13 @@ export async function initDb() {
       UNIQUE (diorama_id, reporter_id)
     );
   `);
+
+  // Case-insensitive uniqueness ("Ann" and "ann" are the same person). Not fatal if old data already clashes.
+  try {
+    await query(`CREATE UNIQUE INDEX IF NOT EXISTS ${t('users_username_lower')} ON ${T.users} (LOWER(username))`);
+  } catch (e) {
+    console.error('[db] could not create the case-insensitive username index:', e.message);
+  }
 }
 
 export async function dropAll() {

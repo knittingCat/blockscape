@@ -5,59 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Blockscape — build block dioramas</title>
   <meta name="description" content="Build block dioramas in your browser, then save a picture or share a link.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%A7%B1%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%235b8cff'/%3E%3Crect x='7' y='7' width='18' height='18' fill='%23ffffff' opacity='.9'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
   <header id="top">
-    <div class="brand">🧱 Blockscape</div>
+    <div class="brand">Blockscape</div>
     <div class="group" id="tools" role="toolbar" aria-label="Tools">
-      <button data-tool="build" title="Place blocks (B) · right-click or Shift-click removes">🧱 <span>Build</span></button>
-      <button data-tool="erase" title="Remove blocks (E)">🧽 <span>Erase</span></button>
-      <button data-tool="select" title="Select an area: click one corner, then the opposite corner (S)">⬚ <span>Select</span></button>
-      <button data-tool="box" title="Fill a box: click two corners (X) · hold Shift on the second click to clear a box">📦 <span>Box</span></button>
-      <button data-tool="pick" title="Pick a block from the scene (I)">👆 <span>Pick</span></button>
-      <button data-tool="label" title="Add a text sign (T)">🏷️ <span>Sign</span></button>
-      <button id="copyBtn" title="Copy the selected area again (C or Cmd/Ctrl+C) — selecting already copies it">📋 <span>Copy</span></button>
-      <button data-tool="paste" title="Paste: choose the footprint, then click to place it (P or Cmd/Ctrl+V)">📌 <span>Paste</span></button>
+      <button data-tool="build" title="Place blocks (B) · right-click or Shift-click removes"><span>Build</span></button>
+      <button data-tool="erase" title="Remove blocks (E)"><span>Erase</span></button>
+      <button data-tool="select" title="Select an area: click one corner, then the opposite corner (S)"><span>Select</span></button>
+      <button data-tool="box" title="Fill a box: click two corners (X) · hold Shift on the second click to clear a box"><span>Box</span></button>
+      <button data-tool="pick" title="Pick a block from the scene (I)"><span>Pick</span></button>
+      <button data-tool="label" title="Add a text sign (T)"><span>Sign</span></button>
+      <button id="copyBtn" title="Copy the selected area again (C or Cmd/Ctrl+C) — selecting already copies it"><span>Copy</span></button>
+      <button data-tool="paste" title="Paste: choose the footprint, then click to place it (P or Cmd/Ctrl+V)"><span>Paste</span></button>
     </div>
     <div class="group">
-      <button id="undo" title="Undo (Cmd/Ctrl+Z)">↩️ <span>Undo</span></button>
-      <button id="redo" title="Redo (Shift+Cmd/Ctrl+Z)">↪️ <span>Redo</span></button>
+      <button id="undo" title="Undo (Cmd/Ctrl+Z)"><span>Undo</span></button>
+      <button id="redo" title="Redo (Shift+Cmd/Ctrl+Z)"><span>Redo</span></button>
     </div>
     <div class="group" id="skies" role="toolbar" aria-label="Time of day">
-      <button data-sky="day" title="Daytime">☀️ <span>Day</span></button>
-      <button data-sky="sunset" title="Sunset">🌇 <span>Sunset</span></button>
-      <button data-sky="night" title="Night">🌙 <span>Night</span></button>
-      <button id="spin" title="Slowly spin the camera (R)">🔄 <span>Spin</span></button>
-      <button id="resetView" title="Reset the camera">🎯 <span>Reset view</span></button>
+      <button data-sky="day" title="Daytime"><span>Day</span></button>
+      <button data-sky="sunset" title="Sunset"><span>Sunset</span></button>
+      <button data-sky="night" title="Night"><span>Night</span></button>
+      <button id="spin" title="Slowly spin the camera (R)"><span>Spin</span></button>
+      <button id="resetView" title="Reset the camera"><span>Reset view</span></button>
     </div>
     <div class="group" id="accountGroup">
-      <button id="accountBtn" hidden title="Sign in or see your dioramas">👤 <span>Sign in</span></button>
-      <button id="galleryBtn" hidden title="Look at dioramas other people shared">🖼️ <span>Gallery</span></button>
-      <button id="cloudBtn" hidden title="Save this diorama to your account">☁️ <span>Save online</span></button>
+      <button id="accountBtn" hidden title="Sign in or see your dioramas"><span>Sign in</span></button>
+      <button id="galleryBtn" hidden title="Look at dioramas other people shared"><span>Gallery</span></button>
+      <button id="cloudBtn" hidden title="Save this diorama to your account"><span>Save online</span></button>
     </div>
     <div class="group">
-      <button id="newBtn" title="Start a new diorama">🆕 <span>New</span></button>
-      <button id="saveBtn" title="Save to a file">💾 <span>Save</span></button>
-      <button id="openBtn" title="Open a saved file">📂 <span>Open</span></button>
-      <button id="linkBtn" title="Copy a link to this diorama">🔗 <span>Share link</span></button>
-      <button id="picBtn" class="primary" title="Download a picture (PNG)">📸 <span>Picture</span></button>
-      <button id="helpBtn" title="How to use">❓</button>
+      <button id="newBtn" title="Start a new diorama"><span>New</span></button>
+      <button id="saveBtn" title="Save to a file"><span>Save</span></button>
+      <button id="openBtn" title="Open a saved file"><span>Open</span></button>
+      <button id="linkBtn" title="Copy a link to this diorama"><span>Share link</span></button>
+      <button id="picBtn" class="primary" title="Download a picture (PNG)"><span>Picture</span></button>
+      <button id="helpBtn" title="How to use"><span>Help</span></button>
     </div>
   </header>
 
   <div id="banner" hidden>
     <span id="bannerText">You're looking at a shared diorama. Your own diorama is safe.</span>
-    <button id="reportBtn" hidden>🚩 Report</button>
+    <button id="reportBtn" hidden>Report</button>
     <button id="ownBtn">Open my own diorama</button>
   </div>
 
   <main id="stage"></main>
   <div id="pasteBar" hidden>
     <span>Choose the footprint, then click to place it</span>
-    <button id="rotateBtn" title="Turn it 90° (Q)">🔄 Rotate</button>
+    <button id="rotateBtn" title="Turn it 90° (Q)">Rotate</button>
     <button id="cancelPasteBtn">Done</button>
   </div>
   <div id="status" aria-live="polite"></div>
@@ -85,7 +85,7 @@
       <label>Start with
         <select id="newKind"><option value="grass">A grass field</option><option value="island">A small island</option><option value="empty">An empty stand</option></select>
       </label>
-      <p class="hint">This replaces what you have now. Use 💾 Save first if you want to keep it.</p>
+      <p class="hint">This replaces what you have now. Use Save first if you want to keep it.</p>
       <div class="row"><button value="cancel">Cancel</button><button value="ok" class="primary">Start</button></div>
     </form>
   </dialog>
@@ -102,7 +102,7 @@
         </label>
         <label class="inline"><input type="checkbox" id="picBar" checked> Show title bar</label>
       </div>
-      <div class="row"><button value="cancel">Close</button><button id="picDownload" value="ok" class="primary">⬇️ Download PNG</button></div>
+      <div class="row"><button value="cancel">Close</button><button id="picDownload" value="ok" class="primary">Download PNG</button></div>
     </form>
   </dialog>
 
@@ -112,13 +112,13 @@
       <ul class="help">
         <li><b>Look around:</b> drag to rotate, scroll or pinch to zoom, right-drag (or two fingers) to move.</li>
         <li><b>Place a block:</b> pick one below, then click the ground or another block.</li>
-        <li><b>Remove a block:</b> right-click it, or hold Shift and click. (The 🧽 Erase tool does the same.)</li>
-        <li><b>Build fast:</b> 📦 Box fills a whole area — click one corner, then the opposite corner. Hold Shift on the second click to clear a box.</li>
-        <li><b>Copy a block:</b> 👆 Pick takes the block you click on.</li>
-        <li><b>Copy and paste:</b> ⬚ Select — click one corner, then the opposite corner; it is copied automatically. Then 📌 Paste: a green footprint follows your pointer — move it where you want, click to place it, 🔄 Rotate (or Q) to turn it. Click Done or press Esc when finished. With an area selected, press <b>Delete</b> to remove everything in it.</li>
-        <li><b>Name things:</b> 🏷️ Sign puts floating text in your scene.</li>
+        <li><b>Remove a block:</b> right-click it, or hold Shift and click. (The Erase tool does the same.)</li>
+        <li><b>Build fast:</b> Box fills a whole area — click one corner, then the opposite corner. Hold Shift on the second click to clear a box.</li>
+        <li><b>Copy a block:</b> Pick takes the block you click on.</li>
+        <li><b>Copy and paste:</b> Select — click one corner, then the opposite corner; it is copied automatically. Then Paste: a green footprint follows your pointer — move it where you want, click to place it, Rotate (or Q) to turn it. Click Done or press Esc when finished. With an area selected, press <b>Delete</b> to remove everything in it.</li>
+        <li><b>Name things:</b> Sign puts floating text in your scene.</li>
         <li><b>Mistake?</b> Cmd/Ctrl+Z undoes it.</li>
-        <li><b>Share it:</b> 📸 Picture saves a PNG you can attach to a post. 🔗 Share link copies a link so classmates can walk around your scene.</li>
+        <li><b>Share it:</b> Picture saves a PNG you can attach to a post. Share link copies a link so classmates can walk around your scene.</li>
       </ul>
       <p class="hint">Keys: 1–9 pick blocks · B build · E erase · X box · S select · Delete clears the selection · C copy · P paste · I pick · T sign · R spin. Your diorama saves itself in this browser.</p>
       <div class="row"><button value="ok" class="primary">Got it</button></div>

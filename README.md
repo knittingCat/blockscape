@@ -9,18 +9,18 @@ Made for projects like "illustrate your favourite scene from a story".
 - **Look around:** drag to rotate, scroll or pinch to zoom, right-drag (or two fingers) to move.
 - **Place a block:** pick one at the bottom, then click the ground or another block.
 - **Remove a block:** right-click it, or hold Shift and click.
-- **Tools:** 🧱 Build · 🧽 Erase · 📦 Box (click two corners to fill an area, Shift on the second click clears it) · 👆 Pick (copy a block) · 🏷️ Sign (floating text).
+- **Tools:** Build · Erase · Box (click two corners to fill an area, Shift on the second click clears it) · Pick (copy a block) · Sign (floating text).
 - **Undo / redo:** Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z.
 - **Keys:** `1`–`9` pick blocks, `B` build, `E` erase, `X` box, `I` pick, `T` sign, `R` spin.
-- **Save / share:** 📸 Picture (PNG with an optional title and caption), 🔗 Share link (the whole scene is inside the link), 💾 Save / 📂 Open (a `.blockscape` file). Your diorama also saves itself in the browser.
+- **Save / share:** Picture (PNG with an optional title and caption), Share link (the whole scene is inside the link), Save / Open (a `.blockscape` file). Your diorama also saves itself in the browser.
 
 ## Accounts and the class gallery
 
 When the site runs with its server (see below) three extra buttons appear:
 
-- **👤 Sign in / your name** — create an account with a username and password (no email, no real name). Shows *My dioramas* and your gallery settings.
-- **☁️ Save online** — save the diorama to your account. Choose *Only me* or *In my gallery*, and optionally require a **code** to open that diorama.
-- **🖼️ Gallery** — look at dioramas other signed-in people shared. A person can protect their whole gallery with a **gallery code**. While looking at someone else's diorama, 🚩 **Report** sends it to the admin.
+- **Sign in / your name** — create an account with a username and password (no email, no real name). Shows *My dioramas* and your gallery settings.
+- **Save online** — save the diorama to your account. Choose *Only me* or *In my gallery*, and optionally require a **code** to open that diorama.
+- **Gallery** — look at dioramas other signed-in people shared. A person can protect their whole gallery with a **gallery code**. While looking at someone else's diorama, **Report** sends it to the admin.
 
 The live site is https://blockscape.onrender.com. If the files are ever served without the server (for example `python3 -m http.server`), these buttons stay hidden and everything else (building, pictures, share links, files) still works.
 

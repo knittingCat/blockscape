@@ -96,7 +96,7 @@ export function createApp() {
   app.get('/api/me', (req, res) => res.json({ user: publicUser(req.user) }));
 
   app.post('/api/signup', rateLimiter({ windowMs: 3600e3, max: 10 }), wrap(async (req, res) => {
-    const username = String(req.body.username || '').trim().toLowerCase();
+    const username = String(req.body.username || '').trim();
     const password = req.body.password;
     const problem = checkUsername(username) || checkPassword(password);
     if (problem) return bad(res, 400, problem);
@@ -114,8 +114,8 @@ export function createApp() {
 
   const DUMMY = hashSecret('not-a-real-password');
   app.post('/api/login', rateLimiter({ windowMs: 600e3, max: 15 }), wrap(async (req, res) => {
-    const username = String(req.body.username || '').trim().toLowerCase();
-    const { rows } = await query(`SELECT * FROM ${T.users} WHERE username = $1`, [username]);
+    const username = String(req.body.username || '').trim();
+    const { rows } = await query(`SELECT * FROM ${T.users} WHERE LOWER(username) = LOWER($1)`, [username]);
     const user = rows[0];
     const ok = await verifySecret(String(req.body.password || ''), user ? user.password_hash : await DUMMY);
     if (!user || !ok) return bad(res, 401, 'That username and password do not match.');
@@ -260,7 +260,7 @@ export function createApp() {
   }));
 
   app.get('/api/gallery/:username', needUser, wrap(async (req, res) => {
-    const { rows: u } = await query(`SELECT id, username, (gallery_code_hash IS NOT NULL) AS has_code FROM ${T.users} WHERE username = $1`, [String(req.params.username).toLowerCase()]);
+    const { rows: u } = await query(`SELECT id, username, (gallery_code_hash IS NOT NULL) AS has_code FROM ${T.users} WHERE LOWER(username) = LOWER($1)`, [String(req.params.username)]);
     if (!u[0]) return bad(res, 404, 'No one has that username.');
     const own = u[0].id === req.user.id || req.user.is_admin;
     if (u[0].has_code && !own && !(await unlocked(req.user.id, 'gallery', u[0].id))) return res.json({ owner: u[0].username, ownerId: u[0].id, locked: 'gallery' });

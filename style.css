@@ -46,7 +46,6 @@ dialog img { width: 100%; border-radius: 10px; border: 1px solid var(--line); ba
 .help { padding-left: 1.1rem; margin: .4rem 0; display: grid; gap: .35rem; }
 
 @media (max-width: 760px) {
-  #top button span { display: none; }
   #top .brand { width: 100%; }
   #status { bottom: 5.4rem; }
 }
@@ -70,7 +69,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 .chip small { color: var(--muted); margin-left: .2rem; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .8rem; margin: .5rem 0; }
 .dcard { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: .5rem; display: flex; flex-direction: column; gap: .3rem; }
-.dthumb { padding: 0; border: 0; background: var(--bg); border-radius: 8px; aspect-ratio: 16 / 10; overflow: hidden; display: grid; place-items: center; font-size: 2rem; }
+.dthumb { padding: 0; border: 0; background: var(--bg); border-radius: 8px; aspect-ratio: 16 / 10; overflow: hidden; display: grid; place-items: center; font-size: .85rem; color: var(--muted); }
 .dthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .dtitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dmeta { color: var(--muted); font-size: .8rem; }

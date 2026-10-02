@@ -24,8 +24,8 @@ export const RESERVED = new Set(['admin', 'administrator', 'root', 'moderator', 
 
 export function checkUsername(name) {
   if (typeof name !== 'string') return 'Pick a username.';
-  if (!/^[a-z0-9_]{3,20}$/.test(name)) return 'Usernames are 3–20 letters, numbers or underscores.';
-  if (RESERVED.has(name)) return 'That username is not available.';
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(name)) return 'Usernames are 3–20 letters, numbers or underscores.';
+  if (RESERVED.has(name.toLowerCase())) return 'That username is not available.';
   return null;
 }
 

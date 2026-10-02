@@ -43,7 +43,7 @@ export async function initAccount(ctx) {
   function authView({ mode = 'login', message = '', after = null, skippable = false } = {}) {
     const signup = mode === 'signup';
     const el = open(`
-      <div class="authbrand">🧱 Blockscape</div>
+      <div class="authbrand">Blockscape</div>
       <h2>${signup ? 'Create an account' : 'Sign in'}</h2>
       ${message ? `<p class="hint">${esc(message)}</p>` : ''}
       <form id="authForm" autocomplete="on">
@@ -53,7 +53,7 @@ export async function initAccount(ctx) {
         <label>Password
           <input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" maxlength="200" required>
         </label>
-        ${signup ? '<p class="hint">Use a made-up username, not your real name. 3–20 letters, numbers or underscores. Passwords need 8+ characters. There is no email, so write your password down — it can\'t be reset by email.</p>' : ''}
+        ${signup ? '<p class="hint">Use a made-up username, not your real name. 3–20 letters, numbers or underscores — capital letters are kept. Passwords need 8+ characters. There is no email, so write your password down — it can\'t be reset by email.</p>' : ''}
         <p class="error" id="authError" hidden></p>
         <div class="row">
           <button type="button" data-act="close">${skippable ? 'Continue without an account' : 'Cancel'}</button>
@@ -150,7 +150,7 @@ export async function initAccount(ctx) {
 
   function unlockView({ kind, id, owner, then }) {
     const el = open(`
-      <h2>🔒 Code needed</h2>
+      <h2>Code needed</h2>
       <p>${kind === 'gallery' ? `${esc(owner)}'s gallery` : `A diorama by ${esc(owner)}`} needs a code. Ask ${esc(owner)} for it.</p>
       <form id="unlockForm">
         <label>Code <input name="code" autocomplete="off" maxlength="40" required></label>
@@ -175,9 +175,9 @@ export async function initAccount(ctx) {
       ? `<div class="cards">${items
           .map(
             (d) => `<div class="dcard">
-              <button class="dthumb" data-open="${d.id}" title="Open">${d.thumb ? `<img src="${esc(d.thumb)}" alt="">` : `<span>${d.locked ? '🔒' : '🧱'}</span>`}</button>
-              <div class="dtitle">${d.locked ? '🔒 ' : ''}${esc(d.title)}</div>
-              <div class="dmeta">${mine ? (d.visibility === 'gallery' ? '🖼️ In my gallery' : '🙈 Only me') + (d.hasCode ? ' · 🔒 code' : '') : `by <button class="link" data-user="${esc(d.owner)}">${esc(d.owner)}</button>`}</div>
+              <button class="dthumb" data-open="${d.id}" title="Open">${d.thumb ? `<img src="${esc(d.thumb)}" alt="">` : `<span>${d.locked ? 'Locked' : 'No picture'}</span>`}</button>
+              <div class="dtitle">${d.locked ? '[Locked] ' : ''}${esc(d.title)}</div>
+              <div class="dmeta">${mine ? (d.visibility === 'gallery' ? 'In my gallery' : 'Only me') + (d.hasCode ? ' · needs a code' : '') : `by <button class="link" data-user="${esc(d.owner)}">${esc(d.owner)}</button>`}</div>
               ${mine ? `<div class="dactions"><button data-open="${d.id}">Open</button><button data-del="${d.id}">Delete</button></div>` : ''}
             </div>`,
           )
@@ -195,7 +195,7 @@ export async function initAccount(ctx) {
     try {
       const { dioramas } = await api('GET', '/api/dioramas/mine');
       const el = open(
-        `<h2>👤 ${esc(user.username)}${user.isAdmin ? ' <small>(admin)</small>' : ''}</h2>
+        `<h2>${esc(user.username)}${user.isAdmin ? ' <small>(admin)</small>' : ''}</h2>
         ${cards(dioramas, { mine: true })}
         <h3>Gallery code</h3>
         <p class="hint">${user.hasGalleryCode ? 'Your gallery needs a code to open.' : 'Anyone signed in can open your gallery.'} You can ask for a code so only people you tell can look.</p>
@@ -254,14 +254,14 @@ export async function initAccount(ctx) {
 
   // ---------- gallery ----------
   async function galleryView() {
-    open('<h2>🖼️ Gallery</h2><p class="hint">Loading…</p>', { wide: true });
+    open('<h2>Gallery</h2><p class="hint">Loading…</p>', { wide: true });
     try {
       const g = await api('GET', '/api/gallery');
       const el = open(
-        `<h2>🖼️ Gallery</h2>
-        <p class="hint">Dioramas other people chose to share. Be kind — use 🚩 Report if something isn't okay.</p>
+        `<h2>Gallery</h2>
+        <p class="hint">Dioramas other people chose to share. Be kind — use Report if something isn't okay.</p>
         <h3>People</h3>
-        <div class="chips">${g.members.length ? g.members.map((m) => `<button class="chip" data-user="${esc(m.username)}">${m.locked ? '🔒 ' : ''}${esc(m.username)} <small>${m.count}</small></button>`).join('') : '<span class="hint">No one has shared anything yet.</span>'}</div>
+        <div class="chips">${g.members.length ? g.members.map((m) => `<button class="chip" data-user="${esc(m.username)}">${m.locked ? '[Locked] ' : ''}${esc(m.username)} <small>${m.count}</small></button>`).join('') : '<span class="hint">No one has shared anything yet.</span>'}</div>
         <h3>Newest</h3>
         ${cards(g.recent)}
         <div class="row"><button type="button" class="primary" data-act="close">Close</button></div>`,
@@ -280,7 +280,7 @@ export async function initAccount(ctx) {
       const g = await api('GET', `/api/gallery/${encodeURIComponent(username)}`);
       if (g.locked) return unlockView({ kind: 'gallery', id: g.ownerId, owner: g.owner, then: () => userGalleryView(username) });
       const el = open(
-        `<h2>🖼️ ${esc(g.owner)}'s gallery</h2>${cards(g.dioramas)}
+        `<h2>${esc(g.owner)}'s gallery</h2>${cards(g.dioramas)}
         <div class="row"><button type="button" data-act="back">← All galleries</button><button type="button" class="primary" data-act="close">Close</button></div>`,
         { wide: true },
       );
@@ -295,7 +295,7 @@ export async function initAccount(ctx) {
   // ---------- report ----------
   function reportView(id, title) {
     const el = open(`
-      <h2>🚩 Report</h2>
+      <h2>Report</h2>
       <p>Tell us what's wrong with “${esc(title)}”. A person will look at it.</p>
       <form id="reportForm">
         <label>What is the problem? <input name="reason" maxlength="300" required autocomplete="off"></label>

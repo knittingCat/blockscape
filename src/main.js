@@ -3,6 +3,7 @@ import { BLOCKS, BLOCK_BY_ID } from './blocks.js';
 import { textureCanvas, topTextureName } from './textures.js';
 import { DioramaView } from './view.js';
 import { initAccount } from './account.js';
+import { api } from './api.js';
 import { extract, rotate90, originFor, placement } from './clipboard.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -65,6 +66,8 @@ let selection = null; // { a, b } finished selection
 let clip = null; // copied blocks (kept when you open another diorama)
 let lastTapKey = null; // touch: first tap previews the paste, second tap places it
 let cloud = null; // the saved-online diorama we are looking at, if any
+let cloudState = ''; // shown in the status line: Saving… / Saved / …
+let cloudTimer = null;
 let accountApi = null;
 
 const stage = $('#stage');
@@ -124,9 +127,9 @@ function setTool(t) {
 function updateStatus() {
   const names = { build: 'Build', erase: 'Erase', box: 'Box fill', pick: 'Pick', label: 'Sign', select: 'Select', paste: 'Paste' };
   let hint = tool === 'box' ? (boxA ? ' — click the opposite corner' : ' — click a first corner') : '';
-  if (tool === 'select') hint = selA ? ' — click the opposite corner' : selection ? ' — copied — press 📌 Paste' : ' — click one corner of the area';
+  if (tool === 'select') hint = selA ? ' — click the opposite corner' : selection ? ' — copied — press Paste' : ' — click one corner of the area';
   if (tool === 'paste') hint = clip ? ` — ${clip.w}×${clip.h}×${clip.d} footprint: move it, then click to place` : '';
-  $('#status').textContent = `${world.count()} blocks · ${names[tool]}${hint} · ${BLOCK_BY_ID.get(selected).name}`;
+  $('#status').textContent = `${world.count()} blocks · ${names[tool]}${hint} · ${BLOCK_BY_ID.get(selected).name}${cloudState ? ' · ' + cloudState : ''}`;
   $('#undo').disabled = !world.undoStack.length;
   $('#redo').disabled = !world.redoStack.length;
 }
@@ -134,12 +137,57 @@ function updateStatus() {
 // ---------- world wiring ----------
 let saveTimer;
 function scheduleSave() {
+  scheduleCloudSave();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
       store.set(sharedMode ? 'shared' : 'scene', await encodeWorld(world));
     } catch {}
   }, 500);
+}
+
+// ---------- autosave to your account ----------
+// Remember which saved diorama this browser was editing, so autosave keeps working after a refresh.
+function rememberCloud() {
+  store.set('cloud', cloud && cloud.mine ? JSON.stringify({ id: cloud.id, title: cloud.title, visibility: cloud.visibility, hasCode: !!cloud.hasCode }) : '');
+}
+
+function setCloudState(text) {
+  cloudState = text;
+  updateStatus();
+}
+
+function scheduleCloudSave() {
+  if (!cloud || !cloud.mine || !accountApi || !accountApi.isSignedIn()) return;
+  setCloudState('Unsaved changes');
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(doCloudSave, 2500);
+}
+
+async function doCloudSave() {
+  const c = cloud;
+  if (!c || !c.mine) return;
+  setCloudState('Saving…');
+  try {
+    await api('POST', '/api/dioramas', {
+      id: c.id,
+      title: c.title,
+      data: await encodeWorld(world),
+      thumb: view.snapshot(320, 200).toDataURL('image/jpeg', 0.72),
+      visibility: c.visibility || 'private',
+    });
+    setCloudState(cloud === c ? 'Saved' : '');
+  } catch (err) {
+    if (err.status === 404 || err.status === 401) {
+      cloud = null;
+      rememberCloud();
+      updateBanner(sharedMode);
+      setCloudState('');
+      toast('Autosave to your account stopped (sign in again and use Save online).');
+    } else {
+      setCloudState('Could not save online — retrying on your next change');
+    }
+  }
 }
 
 function attachWorld(w) {
@@ -170,6 +218,9 @@ async function loadFromText(text, { shared = false, cloud: cloudInfo = null } = 
   view.setWorld(w);
   selection = null;
   view.showSelection(null);
+  clearTimeout(cloudTimer);
+  cloudState = cloudInfo && cloudInfo.mine ? 'Saved' : '';
+  if (!shared && cloudInfo) rememberCloud();
   setTool(tool);
   updateBanner(shared);
 }
@@ -252,7 +303,7 @@ async function actAt(e, button) {
   }
   if (tool === 'paste') {
     if (!clip) {
-      toast('Nothing to paste yet — use ⬚ Select on an area first.');
+      toast('Nothing to paste yet — use Select on an area first.');
       return;
     }
     if (!hit.prev) return;
@@ -266,7 +317,7 @@ async function actAt(e, button) {
     lastTapKey = null;
     const p = placement(world, clip, origin);
     if (!p.fits) {
-      toast("That doesn't fit inside the diorama — move the footprint or 🔄 Rotate it.");
+      toast("That doesn't fit inside the diorama — move the footprint or Rotate it.");
       return;
     }
     world.setManyWithLabels(p.cells, p.labels);
@@ -310,7 +361,7 @@ async function actAt(e, button) {
 
 function copySelection(prefix = '') {
   if (!selection) {
-    toast('Select an area first: ⬚ Select, then click one corner and the opposite corner.');
+    toast('Select an area first: Select, then click one corner and the opposite corner.');
     setTool('select');
     return;
   }
@@ -321,7 +372,7 @@ function copySelection(prefix = '') {
     return;
   }
   clip = copied;
-  toast(`${prefix ? prefix + ' and copied' : 'Copied'} ${clip.cells.length} blocks. Press 📌 Paste to place them.`);
+  toast(`${prefix ? prefix + ' and copied' : 'Copied'} ${clip.cells.length} blocks. Press Paste to place them.`);
   updateStatus();
 }
 
@@ -474,7 +525,7 @@ function wireUI() {
   $$('[data-tool]').forEach((b) =>
     b.addEventListener('click', () => {
       if (b.dataset.tool === 'paste' && !clip) {
-        toast('Nothing to paste yet — use ⬚ Select on an area first.');
+        toast('Nothing to paste yet — use Select on an area first.');
         return;
       }
       setTool(b.dataset.tool);
@@ -501,6 +552,8 @@ function wireUI() {
     if (dlg.returnValue !== 'ok') return;
     sharedMode = false;
     cloud = null;
+    cloudState = '';
+    rememberCloud();
     updateBanner(false);
     history.replaceState(null, '', location.pathname + location.search);
     const w = makeScene(Number($('#newSize').value), $('#newKind').value);
@@ -512,7 +565,7 @@ function wireUI() {
   $('#saveBtn').addEventListener('click', async () => {
     const text = await encodeWorld(world);
     download(new Blob([text], { type: 'text/plain' }), `${slug(world.meta.title)}.blockscape`);
-    toast('Saved a file. Use 📂 Open to load it again.');
+    toast('Saved a file. Use Open to load it again.');
   });
   $('#openBtn').addEventListener('click', () => $('#fileInput').click());
   $('#fileInput').addEventListener('change', async (e) => {
@@ -521,6 +574,10 @@ function wireUI() {
     if (!file) return;
     try {
       await loadFromText(await file.text());
+      cloud = null; // an opened file is not linked to a saved-online diorama
+      cloudState = '';
+      rememberCloud();
+      updateBanner(false);
       scheduleSave();
       toast('Opened ' + file.name);
     } catch (err) {
@@ -536,7 +593,7 @@ function wireUI() {
       copied = true;
     } catch {}
     if (!copied) window.prompt('Copy this link:', url);
-    else if (url.length > 8000) toast('Link copied, but it is very long — some apps may cut it off. 💾 Save is safer for big scenes.', 5000);
+    else if (url.length > 8000) toast('Link copied, but it is very long — some apps may cut it off. Save is safer for big scenes.', 5000);
     else toast('Link copied! Anyone can open it and look around your diorama.');
   });
 
@@ -594,7 +651,7 @@ function wireUI() {
     else if (key === 'x') setTool('box');
     else if (key === 's') setTool('select');
     else if (key === 'c') copySelection();
-    else if (key === 'p') clip ? setTool('paste') : toast('Nothing to paste yet — use ⬚ Select on an area first.');
+    else if (key === 'p') clip ? setTool('paste') : toast('Nothing to paste yet — use Select on an area first.');
     else if (key === 'q') rotateClip();
     else if (key === 'i') setTool('pick');
     else if (key === 't') setTool('label');
@@ -659,10 +716,23 @@ async function main() {
     getCloud: () => cloud,
     setCloud: (c) => {
       cloud = c;
+      cloudState = c && c.mine ? 'Saved' : '';
+      rememberCloud();
       updateBanner(sharedMode);
+      updateStatus();
     },
   });
+  if (!cloud && !sharedMode && accountApi && accountApi.isSignedIn()) {
+    try {
+      const saved = JSON.parse(store.get('cloud') || 'null');
+      if (saved && saved.id) {
+        cloud = { ...saved, mine: true };
+        cloudState = 'Autosaving to your account';
+      }
+    } catch {}
+  }
   updateBanner(sharedMode);
+  updateStatus();
   const askToSignIn = () => {
     // not when someone just opened a shared link: let them look first
     if (accountApi && !location.hash.startsWith('#s=') && !location.search.includes('nosignin')) accountApi.promptIfSignedOut();

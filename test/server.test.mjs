@@ -60,13 +60,14 @@ try {
     assert.equal((await ann.call('POST', '/api/signup', { username: 'admin', password: 'longenough1' })).status, 400);
     const ok = await ann.call('POST', '/api/signup', { username: 'Ann', password: 'longenough1' });
     assert.equal(ok.status, 200);
-    assert.equal(ok.json.user.username, 'ann');
-    assert.equal((await new Client().call('POST', '/api/signup', { username: 'ANN', password: 'longenough1' })).status, 409);
+    assert.equal(ok.json.user.username, 'Ann'); // capitalization is kept
+    assert.equal((await new Client().call('POST', '/api/signup', { username: 'ANN', password: 'longenough1' })).status, 409); // same name, different case
+    assert.equal((await new Client().call('POST', '/api/signup', { username: 'aNn', password: 'longenough1' })).status, 409);
   });
 
   await test('session cookie works, logout and login', async () => {
     const me = await ann.call('GET', '/api/me');
-    assert.equal(me.json.user.username, 'ann');
+    assert.equal(me.json.user.username, 'Ann');
     assert.equal(me.json.user.isAdmin, false);
     assert.equal((await new Client().call('GET', '/api/me')).json.user, null);
     assert.equal((await ann.call('POST', '/api/logout', {})).status, 200);
@@ -74,11 +75,11 @@ try {
     assert.equal((await ann.call('POST', '/api/login', { username: 'ann', password: 'wrong-password' })).status, 401);
     assert.equal((await ann.call('POST', '/api/login', { username: 'nobody', password: 'wrong-password' })).status, 401);
     assert.equal((await ann.call('POST', '/api/login', { username: 'ANN', password: 'longenough1' })).status, 200);
-    assert.equal((await ann.call('GET', '/api/me')).json.user.username, 'ann');
+    assert.equal((await ann.call('GET', '/api/me')).json.user.username, 'Ann'); // logging in with ANN still shows Ann
   });
 
   await test('passwords are stored hashed, tokens are stored hashed', async () => {
-    const { rows } = await query(`SELECT password_hash FROM ${T.users} WHERE username = 'ann'`);
+    const { rows } = await query(`SELECT password_hash FROM ${T.users} WHERE username = 'Ann'`);
     assert.match(rows[0].password_hash, /^s1:[0-9a-f]+:[0-9a-f]+$/);
     assert.ok(!rows[0].password_hash.includes('longenough1'));
     const s = await query(`SELECT token_hash FROM ${T.sessions}`);
@@ -87,7 +88,7 @@ try {
 
   await test('requests without the CSRF header are refused', async () => {
     assert.equal((await ann.call('POST', '/api/logout', {}, { csrf: false })).status, 403);
-    assert.equal((await ann.call('GET', '/api/me')).json.user.username, 'ann'); // still signed in
+    assert.equal((await ann.call('GET', '/api/me')).json.user.username, 'Ann'); // logging in with ANN still shows Ann // still signed in
   });
 
   await test('everything needs a session', async () => {
@@ -120,12 +121,12 @@ try {
     const made = await ann.call('POST', '/api/dioramas', { title: 'The Little House', data: DATA, visibility: 'gallery', thumb: 'data:image/jpeg;base64,AAAA' });
     galleryId = made.json.id;
     const gal = await ben.call('GET', '/api/gallery');
-    assert.equal(gal.json.members[0].username, 'ann');
+    assert.equal(gal.json.members[0].username, 'Ann');
     assert.equal(gal.json.recent.length, 1);
     assert.equal(gal.json.recent[0].locked, false);
     const open = await ben.call('GET', `/api/dioramas/${galleryId}`);
     assert.equal(open.status, 200);
-    assert.equal(open.json.owner, 'ann');
+    assert.equal(open.json.owner, 'Ann');
     assert.equal(open.json.mine, false);
     const user = await ben.call('GET', '/api/gallery/ann');
     assert.equal(user.json.dioramas.length, 1);
