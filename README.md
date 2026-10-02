@@ -11,7 +11,7 @@ Made for projects like "illustrate your favourite scene from a story".
 - **Remove a block:** right-click it, or hold Shift and click.
 - **Tools:** Build · Erase · Box (click two corners to fill an area, Shift on the second click clears it) · Pick (copy a block) · Sign (floating text).
 - **Undo / redo:** Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z.
-- **Keys:** `1`–`9` pick blocks, `P` place blocks, `E` erase, `X` box, `I` pick, `T` sign.
+- **Keys:** `1`–`9` pick blocks, `B` build, `P` place a block at the pointer, `E` erase, `X` box, `I` pick, `T` sign.
 - **Save / share:** Picture (PNG with an optional title and caption), Share link (the whole scene is inside the link), Save / Open (a `.blockscape` file). Your diorama also saves itself in the browser.
 
 ## Accounts and the class gallery

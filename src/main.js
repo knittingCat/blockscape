@@ -361,6 +361,23 @@ async function actAt(e, button) {
   }
 }
 
+// P: place the selected block where the pointer is, without clicking (or place the paste, when pasting).
+function placeAtPointer(e) {
+  if (e.repeat) return; // holding the key must not stack blocks
+  if (!hoverInfo) {
+    toast('Move the pointer over the diorama, then press P.');
+    return;
+  }
+  e.preventDefault();
+  if (tool === 'paste') {
+    actAt(hoverInfo, 0).finally(() => refreshHover());
+    return;
+  }
+  const { hit } = currentHit(hoverInfo);
+  if (hit && hit.prev) world.setMany([[hit.prev[0], hit.prev[1], hit.prev[2], selected]]);
+  refreshHover();
+}
+
 function copySelection(prefix = '') {
   if (!selection) {
     toast('Select an area first: Select, then click one corner and the opposite corner.');
@@ -648,11 +665,12 @@ function wireUI() {
       deleteSelection();
     } else if (/^[1-9]$/.test(e.key)) {
       selectBlock(Number(e.key));
-    } else if (key === 'p' || key === 'b') setTool('build'); // P = place blocks (B still works)
+    } else if (key === 'b') setTool('build');
     else if (key === 'e') setTool('erase');
     else if (key === 'x') setTool('box');
     else if (key === 's') setTool('select');
     else if (key === 'c') copySelection();
+    else if (key === 'p') placeAtPointer(e);
     else if (key === 'v') clip ? setTool('paste') : toast('Nothing to paste yet — use Select on an area first.');
     else if (key === 'q') rotateClip();
     else if (key === 'i') setTool('pick');
