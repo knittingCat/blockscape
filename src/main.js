@@ -59,7 +59,6 @@ let tool = 'build';
 let selected = 1;
 let boxA = null;
 let sharedMode = false;
-let spinning = false;
 let hoverInfo = null;
 let selA = null; // first corner of a selection in progress
 let selection = null; // { a, b } finished selection
@@ -546,8 +545,6 @@ function wireUI() {
   );
   $('#undo').addEventListener('click', () => world.undo());
   $('#redo').addEventListener('click', () => world.redo());
-  $('#spin').addEventListener('click', toggleSpin);
-  $('#resetView').addEventListener('click', () => view.resetCamera());
 
   $('#newBtn').addEventListener('click', () => $('#newDialog').showModal());
   $('#newDialog').addEventListener('close', () => {
@@ -660,7 +657,6 @@ function wireUI() {
     else if (key === 'q') rotateClip();
     else if (key === 'i') setTool('pick');
     else if (key === 't') setTool('label');
-    else if (key === 'r') toggleSpin();
     else if (e.key === 'Escape') {
       boxA = null;
       selA = null;
@@ -675,12 +671,6 @@ function wireUI() {
   window.addEventListener('hashchange', () => {
     if (location.hash.startsWith('#s=')) loadStart(true);
   });
-}
-
-function toggleSpin() {
-  spinning = !spinning;
-  view.controls.autoRotate = spinning;
-  $('#spin').classList.toggle('active', spinning);
 }
 
 // ---------- start ----------
