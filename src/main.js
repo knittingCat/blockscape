@@ -166,7 +166,8 @@ function scheduleCloudSave() {
 
 async function doCloudSave() {
   const c = cloud;
-  if (!c || !c.mine) return;
+  if (!c || !c.mine) return false;
+  clearTimeout(cloudTimer);
   setCloudState('Saving…');
   try {
     await api('POST', '/api/dioramas', {
@@ -177,16 +178,18 @@ async function doCloudSave() {
       visibility: c.visibility || 'private',
     });
     setCloudState(cloud === c ? 'Saved' : '');
+    return true;
   } catch (err) {
     if (err.status === 404 || err.status === 401) {
       cloud = null;
       rememberCloud();
       updateBanner(sharedMode);
       setCloudState('');
-      toast('Autosave to your account stopped (sign in again and use Save online).');
+      toast('Autosave to your account stopped (sign in again and press Save).');
     } else {
       setCloudState('Could not save online — retrying on your next change');
     }
+    return false;
   }
 }
 
@@ -562,11 +565,14 @@ function wireUI() {
     scheduleSave();
   });
 
-  $('#saveBtn').addEventListener('click', async () => {
+  const saveFile = async () => {
     const text = await encodeWorld(world);
     download(new Blob([text], { type: 'text/plain' }), `${slug(world.meta.title)}.blockscape`);
-    toast('Saved a file. Use Open to load it again.');
-  });
+    toast('Downloaded a file. Use Open file to load it again.');
+  };
+  // With accounts, Save goes to your account; without a server it downloads a file as before.
+  $('#saveBtn').addEventListener('click', () => (accountApi ? accountApi.save() : saveFile()));
+  $('#exportBtn').addEventListener('click', saveFile);
   $('#openBtn').addEventListener('click', () => $('#fileInput').click());
   $('#fileInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -713,6 +719,7 @@ async function main() {
     loadScene: loadFromText,
     makeThumb: () => view.snapshot(320, 200).toDataURL('image/jpeg', 0.72),
     toast,
+    saveNow: doCloudSave,
     getCloud: () => cloud,
     setCloud: (c) => {
       cloud = c;

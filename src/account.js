@@ -10,11 +10,10 @@ export async function initAccount(ctx) {
   const body = $('#panelBody');
   const accountBtn = $('#accountBtn');
   const galleryBtn = $('#galleryBtn');
-  const cloudBtn = $('#cloudBtn');
 
   if (!(await accountsAvailable())) return; // plain static copy: keep the buttons hidden
   let user = null;
-  for (const b of [accountBtn, galleryBtn, cloudBtn]) b.hidden = false;
+  for (const b of [accountBtn, galleryBtn]) b.hidden = false;
 
   async function refreshMe() {
     user = (await api('GET', '/api/me')).user;
@@ -87,7 +86,7 @@ export async function initAccount(ctx) {
     const cloud = ctx.getCloud();
     const updating = cloud && cloud.mine;
     const el = open(`
-      <h2>${updating ? 'Save changes online' : 'Save online'}</h2>
+      <h2>${updating ? 'Save changes' : 'Save to your account'}</h2>
       <form id="saveForm">
         <label>Title <input name="title" maxlength="80" required value="${esc(updating ? cloud.title : world.meta.title || '')}" placeholder="e.g. Chapter 3: The Little House"></label>
         <fieldset>
@@ -318,7 +317,6 @@ export async function initAccount(ctx) {
   // ---------- toolbar ----------
   accountBtn.onclick = () => (user ? mineView() : authView());
   galleryBtn.onclick = () => (user ? galleryView() : needSignIn('Sign in to see the gallery.', galleryView));
-  cloudBtn.onclick = () => (user ? saveView() : needSignIn('Sign in to save your diorama online.', saveView));
 
   // Asked every time the site opens while nobody is signed in.
   function promptIfSignedOut() {
@@ -326,5 +324,17 @@ export async function initAccount(ctx) {
     authView({ mode: 'login', skippable: true, message: 'Sign in to save your dioramas online and see the class gallery — or skip this and just build.' });
   }
 
-  return { promptIfSignedOut, report: (id, title) => (user ? reportView(id, title) : needSignIn('Sign in to send a report.', () => reportView(id, title))), isSignedIn: () => !!user };
+  // The main Save button: first save asks for a title and who can see it; later saves just update.
+  async function save() {
+    if (!user) return needSignIn('Sign in to save your diorama to your account.', save);
+    const cloud = ctx.getCloud();
+    if (cloud && cloud.mine) {
+      const ok = await ctx.saveNow();
+      ctx.toast(ok ? 'Saved to your account.' : 'Could not save. Check your connection and try again.');
+    } else {
+      saveView();
+    }
+  }
+
+  return { save, promptIfSignedOut, report: (id, title) => (user ? reportView(id, title) : needSignIn('Sign in to send a report.', () => reportView(id, title))), isSignedIn: () => !!user };
 }
