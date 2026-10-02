@@ -42,7 +42,7 @@ export async function initAccount(ctx) {
   function authView({ mode = 'login', message = '', after = null, skippable = false } = {}) {
     const signup = mode === 'signup';
     const el = open(`
-      <div class="authbrand">Blockscape</div>
+      <div class="authbrand">🧱 Blockscape</div>
       <h2>${signup ? 'Create an account' : 'Sign in'}</h2>
       ${message ? `<p class="hint">${esc(message)}</p>` : ''}
       <form id="authForm" autocomplete="on">
