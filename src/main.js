@@ -572,7 +572,6 @@ function wireUI() {
   };
   // With accounts, Save goes to your account; without a server it downloads a file as before.
   $('#saveBtn').addEventListener('click', () => (accountApi ? accountApi.save() : saveFile()));
-  $('#exportBtn').addEventListener('click', saveFile);
   $('#openBtn').addEventListener('click', () => $('#fileInput').click());
   $('#fileInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];

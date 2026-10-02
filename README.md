@@ -19,7 +19,7 @@ Made for projects like "illustrate your favourite scene from a story".
 When the site runs with its server (see below) three extra buttons appear:
 
 - **Sign in / your name** — create an account with a username and password (no email, no real name). Shows *My dioramas* and your gallery settings.
-- **Save** — save the diorama to your account. The first time you choose a title, *Only me* or *In my gallery*, and optionally a **code** to open that diorama. After that, Save updates it, and changes also autosave a few seconds after you stop editing. (**Download file** and **Open file** keep a copy on your own computer.)
+- **Save** — save the diorama to your account. The first time you choose a title, *Only me* or *In my gallery*, and optionally a **code** to open that diorama. After that, Save updates it, and changes also autosave a few seconds after you stop editing. (**Open file** loads a `.blockscape` file from your computer.)
 - **Gallery** — look at dioramas other signed-in people shared. A person can protect their whole gallery with a **gallery code**. While looking at someone else's diorama, **Report** sends it to the admin.
 
 The live site is https://blockscape.onrender.com. If the files are ever served without the server (for example `python3 -m http.server`), these buttons stay hidden and everything else (building, pictures, share links, files) still works.
