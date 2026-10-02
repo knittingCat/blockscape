@@ -92,6 +92,33 @@ export class World {
     return changes.length + labelsAdd.length;
   }
 
+  // Remove every block and sign inside the box (corners in any order) as ONE undo step.
+  clearRegion(a, b) {
+    const lo = [0, 1, 2].map((i) => Math.min(a[i], b[i]));
+    const hi = [0, 1, 2].map((i) => Math.max(a[i], b[i]));
+    const changes = [];
+    for (let y = Math.max(lo[1], 0); y <= Math.min(hi[1], this.height - 1); y++) {
+      for (let z = Math.max(lo[2], 0); z <= Math.min(hi[2], this.size - 1); z++) {
+        for (let x = Math.max(lo[0], 0); x <= Math.min(hi[0], this.size - 1); x++) {
+          const i = this.index(x, y, z);
+          if (this.cells[i]) {
+            changes.push({ i, from: this.cells[i], to: 0 });
+            this.cells[i] = 0;
+          }
+        }
+      }
+    }
+    const inside = (l) => l.x >= lo[0] && l.x <= hi[0] && l.y >= lo[1] && l.y <= hi[1] && l.z >= lo[2] && l.z <= hi[2];
+    const labelsRemove = this.labels.filter(inside);
+    this.labels = this.labels.filter((l) => !inside(l));
+    if (!changes.length && !labelsRemove.length) return { blocks: 0, labels: 0 };
+    this.undoStack.push({ cells: changes, labelsRemove });
+    this.redoStack.length = 0;
+    if (changes.length) this.emit({ type: 'cells', changes });
+    if (labelsRemove.length) this.emit({ type: 'labels' });
+    return { blocks: changes.length, labels: labelsRemove.length };
+  }
+
   boxCells(a, b) {
     const out = [];
     const [x0, x1] = [Math.min(a[0], b[0]), Math.max(a[0], b[0])];
@@ -155,6 +182,10 @@ export class World {
         }
       }
       this.emit({ type: 'cells', changes });
+    }
+    if (step.labelsRemove) {
+      if (reverse) for (const l of step.labelsRemove) this.addLabel(l.x, l.y, l.z, l.text, { record: false, id: l.id });
+      else for (const l of step.labelsRemove) this.removeLabel(l.id, { record: false });
     }
     if (step.labelsAdd) {
       if (reverse) for (const l of step.labelsAdd) this.removeLabel(l.id, { record: false });

@@ -325,6 +325,20 @@ function copySelection(prefix = '') {
   updateStatus();
 }
 
+function deleteSelection() {
+  if (!selection) return false;
+  const r = world.clearRegion(selection.a, selection.b);
+  if (!r.blocks && !r.labels) {
+    toast('Nothing to delete in that area.');
+    return true;
+  }
+  selection = null;
+  view.showSelection(null);
+  toast(`Deleted ${r.blocks} blocks${r.labels ? ` and ${r.labels} sign${r.labels > 1 ? 's' : ''}` : ''}. Cmd/Ctrl+Z brings them back.`);
+  updateStatus();
+  return true;
+}
+
 function rotateClip() {
   if (!clip) return;
   clip = rotate90(clip);
@@ -570,6 +584,9 @@ function wireUI() {
       }
     } else if (mod) {
       return;
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selection) {
+      e.preventDefault();
+      deleteSelection();
     } else if (/^[1-9]$/.test(e.key)) {
       selectBlock(Number(e.key));
     } else if (key === 'b') setTool('build');

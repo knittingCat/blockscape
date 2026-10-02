@@ -179,4 +179,29 @@ await test('paste: placement, fit check, one undo step including labels', () => 
   assert.equal(placement(w, clip, [7, 31, 7]).fits, false); // too tall
 });
 
+await test('clearRegion deletes blocks and signs inside only, in one undo step', () => {
+  const w = new World(16);
+  w.fillBox([0, 0, 0], [5, 2, 5], 3);
+  w.addLabel(1, 3, 1, 'inside');
+  w.addLabel(9, 0, 9, 'outside');
+  const before = w.count();
+  const r = w.clearRegion([4, 2, 4], [1, 0, 1]); // corners in any order
+  assert.deepEqual(r, { blocks: 4 * 3 * 4, labels: 0 }); // the sign at y=3 is above the box
+  assert.equal(w.count(), before - 48);
+  assert.equal(w.get(0, 0, 0), 3); // outside the box is untouched
+  const r2 = w.clearRegion([0, 0, 0], [5, 3, 5]);
+  assert.equal(r2.labels, 1);
+  assert.deepEqual(w.labels.map((l) => l.text), ['outside']);
+  assert.equal(w.count(), 0);
+  assert.ok(w.undo()); // one undo brings back the blocks AND the sign
+  assert.equal(w.labels.length, 2);
+  assert.equal(w.count(), before - 48);
+  assert.ok(w.redo());
+  assert.equal(w.count(), 0);
+  assert.deepEqual(w.clearRegion([0, 0, 0], [5, 3, 5]), { blocks: 0, labels: 0 }); // nothing left: no history entry
+  const steps = w.undoStack.length;
+  w.clearRegion([0, 0, 0], [1, 1, 1]);
+  assert.equal(w.undoStack.length, steps);
+});
+
 console.log(`${n} tests passed`);
