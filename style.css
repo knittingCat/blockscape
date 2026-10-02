@@ -22,7 +22,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 
 #stage { flex: 1; min-height: 0; position: relative; touch-action: none; }
 #stage canvas { display: block; touch-action: none; cursor: crosshair; outline: none; }
-#status { flex: none; background: var(--panel); border-top: 1px solid var(--line); padding: .3rem .8rem; font-size: .85rem; color: var(--muted); min-height: 1.9rem; }
+#status { position: absolute; left: .8rem; bottom: 5.6rem; background: rgba(18,21,31,.78); border: 1px solid var(--line); border-radius: 8px; padding: .2rem .6rem; font-size: .82rem; color: var(--muted); pointer-events: none; }
 #toast { position: fixed; left: 50%; top: 4.2rem; transform: translate(-50%, -12px); background: #fff; color: #111; padding: .5rem .9rem; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.4); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: 90vw; z-index: 20; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
@@ -47,6 +47,7 @@ dialog img { width: 100%; border-radius: 10px; border: 1px solid var(--line); ba
 
 @media (max-width: 760px) {
   #top .brand { width: 100%; }
+  #status { bottom: 5.4rem; }
 }
 
 /* ----- accounts, gallery ----- */
@@ -88,7 +89,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 #panel.full h2 { font-size: 1.6rem; margin-bottom: .8rem; }
 .authbrand { font-size: 2.2rem; font-weight: 800; margin-bottom: .4rem; }
 
-#pasteBar { position: fixed; left: 50%; bottom: 8.4rem; transform: translateX(-50%); display: flex; align-items: center; gap: .6rem; background: rgba(18,21,31,.92); border: 1px solid #34d399; border-radius: 12px; padding: .4rem .7rem; z-index: 6; font-size: .9rem; max-width: 94vw; flex-wrap: wrap; justify-content: center; }
+#pasteBar { position: absolute; left: 50%; bottom: 5.8rem; transform: translateX(-50%); display: flex; align-items: center; gap: .6rem; background: rgba(18,21,31,.92); border: 1px solid #34d399; border-radius: 12px; padding: .4rem .7rem; z-index: 6; font-size: .9rem; max-width: 94vw; flex-wrap: wrap; justify-content: center; }
 #pasteBar[hidden] { display: none; }
 
 /* ----- icon buttons ----- */
