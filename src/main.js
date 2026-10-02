@@ -438,6 +438,20 @@ function copySelection(prefix = '') {
   updateStatus();
 }
 
+// Remove every block and sign. One undo step brings everything back.
+function clearAll() {
+  if (!world.count() && !world.labels.length) {
+    toast('The diorama is already empty.');
+    return;
+  }
+  if (!confirm('Clear everything in this diorama? You can undo it with Cmd/Ctrl+Z.')) return;
+  const r = world.clearRegion([0, 0, 0], [world.size - 1, world.height - 1, world.size - 1]);
+  selection = null;
+  view.showSelection(null);
+  toast(`Cleared ${r.blocks} blocks${r.labels ? ` and ${r.labels} sign${r.labels > 1 ? 's' : ''}` : ''}. Cmd/Ctrl+Z brings them back.`);
+  updateStatus();
+}
+
 function deleteSelection() {
   if (!selection) return false;
   const r = world.clearRegion(selection.a, selection.b);
@@ -617,6 +631,7 @@ function wireUI() {
       scheduleSave();
     }),
   );
+  $('#clearBtn').addEventListener('click', clearAll);
   $('#undo').addEventListener('click', () => world.undo());
   $('#redo').addEventListener('click', () => world.redo());
 
