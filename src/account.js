@@ -320,12 +320,8 @@ export async function initAccount(ctx) {
   galleryBtn.onclick = () => (user ? galleryView() : needSignIn('Sign in to see the gallery.', galleryView));
   cloudBtn.onclick = () => (user ? saveView() : needSignIn('Sign in to save your diorama online.', saveView));
 
-  // Asked once per browser tab when the site opens and nobody is signed in.
+  // Asked every time the site opens while nobody is signed in.
   function promptIfSignedOut() {
-    try {
-      if (user || sessionStorage.getItem('bs-asked')) return;
-      sessionStorage.setItem('bs-asked', '1');
-    } catch {}
     if (user) return;
     authView({ mode: 'login', skippable: true, message: 'Sign in to save your dioramas online and see the class gallery — or skip this and just build.' });
   }
