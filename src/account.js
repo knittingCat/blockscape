@@ -17,7 +17,9 @@ export async function initAccount(ctx) {
 
   async function refreshMe() {
     user = (await api('GET', '/api/me')).user;
-    $('span', accountBtn).textContent = user ? user.username : 'Sign in';
+    $('span', accountBtn).textContent = user ? user.username : '';
+    accountBtn.setAttribute('aria-label', user ? `Account: ${user.username}` : 'Sign in');
+    accountBtn.title = user ? 'Your dioramas and settings' : 'Sign in or create an account';
   }
   await refreshMe();
 
