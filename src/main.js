@@ -124,7 +124,7 @@ function setTool(t) {
 function updateStatus() {
   const names = { build: 'Build', erase: 'Erase', box: 'Box fill', pick: 'Pick', label: 'Sign', select: 'Select', paste: 'Paste' };
   let hint = tool === 'box' ? (boxA ? ' — click the opposite corner' : ' — click a first corner') : '';
-  if (tool === 'select') hint = selA ? ' — click the opposite corner' : selection ? ' — selected! now press 📋 Copy' : ' — click one corner of the area';
+  if (tool === 'select') hint = selA ? ' — click the opposite corner' : selection ? ' — copied — press 📌 Paste' : ' — click one corner of the area';
   if (tool === 'paste') hint = clip ? ` — ${clip.w}×${clip.h}×${clip.d} footprint: move it, then click to place` : '';
   $('#status').textContent = `${world.count()} blocks · ${names[tool]}${hint} · ${BLOCK_BY_ID.get(selected).name}`;
   $('#undo').disabled = !world.undoStack.length;
@@ -245,14 +245,14 @@ async function actAt(e, button) {
       const w = Math.abs(selection.a[0] - selection.b[0]) + 1;
       const h = Math.abs(selection.a[1] - selection.b[1]) + 1;
       const d = Math.abs(selection.a[2] - selection.b[2]) + 1;
-      toast(`Selected ${w}×${h}×${d}. Now press 📋 Copy.`);
+      copySelection(`Selected ${w}×${h}×${d}`); // selecting copies automatically
     }
     updateStatus();
     return;
   }
   if (tool === 'paste') {
     if (!clip) {
-      toast('Nothing copied yet — Select an area, then press 📋 Copy.');
+      toast('Nothing to paste yet — use ⬚ Select on an area first.');
       return;
     }
     if (!hit.prev) return;
@@ -308,19 +308,20 @@ async function actAt(e, button) {
   }
 }
 
-function copySelection() {
+function copySelection(prefix = '') {
   if (!selection) {
     toast('Select an area first: ⬚ Select, then click one corner and the opposite corner.');
     setTool('select');
     return;
   }
-  clip = extract(world, selection.a, selection.b);
-  if (!clip.cells.length) {
+  const copied = extract(world, selection.a, selection.b);
+  if (!copied.cells.length) {
     clip = null;
-    toast('That area is empty — there is nothing to copy.');
+    toast(`${prefix ? prefix + ' — but' : ''} that area is empty, so there is nothing to paste.`.trim());
     return;
   }
-  toast(`Copied ${clip.cells.length} blocks. Press 📌 Paste to place them.`);
+  clip = copied;
+  toast(`${prefix ? prefix + ' and copied' : 'Copied'} ${clip.cells.length} blocks. Press 📌 Paste to place them.`);
   updateStatus();
 }
 
@@ -459,7 +460,7 @@ function wireUI() {
   $$('[data-tool]').forEach((b) =>
     b.addEventListener('click', () => {
       if (b.dataset.tool === 'paste' && !clip) {
-        toast('Nothing copied yet — Select an area, then press 📋 Copy.');
+        toast('Nothing to paste yet — use ⬚ Select on an area first.');
         return;
       }
       setTool(b.dataset.tool);
@@ -576,7 +577,7 @@ function wireUI() {
     else if (key === 'x') setTool('box');
     else if (key === 's') setTool('select');
     else if (key === 'c') copySelection();
-    else if (key === 'p') clip ? setTool('paste') : toast('Nothing copied yet — Select an area, then press 📋 Copy.');
+    else if (key === 'p') clip ? setTool('paste') : toast('Nothing to paste yet — use ⬚ Select on an area first.');
     else if (key === 'q') rotateClip();
     else if (key === 'i') setTool('pick');
     else if (key === 't') setTool('label');
