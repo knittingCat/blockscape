@@ -56,12 +56,33 @@ const PAINTERS = {
     speckles(ctx, r, [95, 95, 100], 14);
   },
   cobble(ctx, r) {
-    noise(ctx, r, [120, 120, 122], 26);
-    for (let i = 0; i < 9; i++) {
-      const x = Math.floor(r() * 12);
-      const y = Math.floor(r() * 12);
-      ctx.strokeStyle = css([70, 70, 74], 0.8);
-      ctx.strokeRect(x + 0.5, y + 0.5, 3 + Math.floor(r() * 3), 3 + Math.floor(r() * 3));
+    // irregular rounded stones separated by dark mortar; each stone has its own shade and a lit top-left edge
+    const mortar = [84, 84, 88];
+    ctx.fillStyle = css(mortar);
+    ctx.fillRect(0, 0, N, N);
+    const rows = [
+      { y: 0, h: 5, cuts: [0, 7, 11, 16] },
+      { y: 5, h: 5, cuts: [0, 4, 11, 16] },
+      { y: 10, h: 6, cuts: [0, 3, 9, 16] },
+    ];
+    for (const row of rows) {
+      for (let i = 0; i < row.cuts.length - 1; i++) {
+        const x0 = row.cuts[i];
+        const x1 = row.cuts[i + 1] - 1; // leave a 1px mortar line on the right
+        const y0 = row.y;
+        const y1 = row.y + row.h - 1; // and on the bottom
+        const base = 116 + r() * 30;
+        for (let y = y0; y < y1; y++) {
+          for (let x = x0; x < x1; x++) {
+            const corner = (x === x0 || x === x1 - 1) && (y === y0 || y === y1 - 1) && x1 - x0 > 4;
+            if (corner) continue; // rounded corner: leave mortar showing
+            let shadeAmt = (r() - 0.5) * 16;
+            if (x === x0 || y === y0) shadeAmt += 9; // lit edge
+            if (x === x1 - 1 || y === y1 - 1) shadeAmt -= 8; // shaded edge
+            px(ctx, x, y, [base + shadeAmt, base + shadeAmt, base + shadeAmt + 3]);
+          }
+        }
+      }
     }
   },
   sand(ctx, r) {

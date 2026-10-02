@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>texture preview</title>
+<style>body{margin:12px;background:#222;color:#ddd;font:14px system-ui}canvas{image-rendering:pixelated;margin:6px;vertical-align:top}</style></head>
+<body>
+<div id="out"></div>
+<script type="module">
+import { textureCanvas } from '../src/textures.js';
+const out = document.getElementById('out');
+function big(name, scale, tiles = 1) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 16 * tiles * scale;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const t = textureCanvas(name);
+  for (let y = 0; y < tiles; y++) for (let x = 0; x < tiles; x++) ctx.drawImage(t, x * 16 * scale, y * 16 * scale, 16 * scale, 16 * scale);
+  out.appendChild(c);
+}
+big('cobble', 10, 3);   // 3x3 tiled, like a wall of cobblestone blocks
+big('stone', 10, 2);
+big('brick', 10, 2);
+</script></body></html>
