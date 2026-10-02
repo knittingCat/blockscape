@@ -67,6 +67,31 @@ export class World {
     return changes.length;
   }
 
+  // Like setMany, but also adds text labels, all as ONE undo step (used by paste).
+  setManyWithLabels(list, labelList) {
+    const changes = [];
+    for (const [x, y, z, id] of list) {
+      if (!this.inBounds(x, y, z)) continue;
+      const i = this.index(x, y, z);
+      if (this.cells[i] === id) continue;
+      changes.push({ i, from: this.cells[i], to: id });
+      this.cells[i] = id;
+    }
+    const labelsAdd = [];
+    for (const l of labelList) {
+      if (!this.inBounds(l.x, l.y, l.z)) continue;
+      const label = { id: this.nextLabelId++, x: l.x, y: l.y, z: l.z, text: String(l.text).slice(0, 80) };
+      this.labels.push(label);
+      labelsAdd.push(label);
+    }
+    if (!changes.length && !labelsAdd.length) return 0;
+    this.undoStack.push({ cells: changes, labelsAdd });
+    this.redoStack.length = 0;
+    if (changes.length) this.emit({ type: 'cells', changes });
+    if (labelsAdd.length) this.emit({ type: 'labels' });
+    return changes.length + labelsAdd.length;
+  }
+
   boxCells(a, b) {
     const out = [];
     const [x0, x1] = [Math.min(a[0], b[0]), Math.max(a[0], b[0])];
@@ -130,6 +155,10 @@ export class World {
         }
       }
       this.emit({ type: 'cells', changes });
+    }
+    if (step.labelsAdd) {
+      if (reverse) for (const l of step.labelsAdd) this.removeLabel(l.id, { record: false });
+      else for (const l of step.labelsAdd) this.addLabel(l.x, l.y, l.z, l.text, { record: false, id: l.id });
     }
     if (step.labelAdd) {
       if (reverse) this.removeLabel(step.labelAdd.id, { record: false });

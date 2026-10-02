@@ -3,6 +3,7 @@ import { BLOCKS, BLOCK_BY_ID } from './blocks.js';
 import { textureCanvas, topTextureName } from './textures.js';
 import { DioramaView } from './view.js';
 import { initAccount } from './account.js';
+import { extract, rotate90, originFor, placement } from './clipboard.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -59,6 +60,10 @@ let boxA = null;
 let sharedMode = false;
 let spinning = false;
 let hoverInfo = null;
+let selA = null; // first corner of a selection in progress
+let selection = null; // { a, b } finished selection
+let clip = null; // copied blocks (kept when you open another diorama)
+let lastTapKey = null; // touch: first tap previews the paste, second tap places it
 let cloud = null; // the saved-online diorama we are looking at, if any
 let accountApi = null;
 
@@ -106,15 +111,21 @@ function selectBlock(id) {
 function setTool(t) {
   tool = t;
   boxA = null;
+  selA = null;
+  lastTapKey = null;
   view?.showRegion(null, null);
+  if (t !== 'paste') view?.showFootprint(null);
+  $('#pasteBar').hidden = t !== 'paste';
   $$('[data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
   updateStatus();
   refreshHover();
 }
 
 function updateStatus() {
-  const names = { build: 'Build', erase: 'Erase', box: 'Box fill', pick: 'Pick', label: 'Sign' };
-  const hint = tool === 'box' ? (boxA ? ' — click the opposite corner' : ' — click a first corner') : '';
+  const names = { build: 'Build', erase: 'Erase', box: 'Box fill', pick: 'Pick', label: 'Sign', select: 'Select', paste: 'Paste' };
+  let hint = tool === 'box' ? (boxA ? ' — click the opposite corner' : ' — click a first corner') : '';
+  if (tool === 'select') hint = selA ? ' — click the opposite corner' : selection ? ' — selected! now press 📋 Copy' : ' — click one corner of the area';
+  if (tool === 'paste') hint = clip ? ` — ${clip.w}×${clip.h}×${clip.d} footprint: move it, then click to place` : '';
   $('#status').textContent = `${world.count()} blocks · ${names[tool]}${hint} · ${BLOCK_BY_ID.get(selected).name}`;
   $('#undo').disabled = !world.undoStack.length;
   $('#redo').disabled = !world.redoStack.length;
@@ -157,6 +168,8 @@ async function loadFromText(text, { shared = false, cloud: cloudInfo = null } = 
   cloud = cloudInfo;
   attachWorld(w);
   view.setWorld(w);
+  selection = null;
+  view.showSelection(null);
   setTool(tool);
   updateBanner(shared);
 }
@@ -173,9 +186,22 @@ function refreshHover(e) {
   const { hit } = currentHit(hoverInfo);
   const erasing = tool === 'erase' || hoverInfo.shiftKey;
   const block = BLOCK_BY_ID.get(selected);
+  if (tool === 'paste') {
+    view.showGhost(null);
+    if (!hit || !clip || !hit.prev) return view.showFootprint(null);
+    const origin = originFor(clip, hit.prev);
+    view.showFootprint([clip.w, clip.h, clip.d], origin, placement(world, clip, origin).fits);
+    return;
+  }
   if (!hit) {
     view.showGhost(null);
     view.showRegion(null, null);
+    return;
+  }
+  if (tool === 'select') {
+    const corner = hit.cell || hit.prev;
+    view.showGhost(corner, { color: 0x4dd0e1, opacity: 0.3, scale: 1.03 });
+    if (selA && corner) view.showRegion(selA, corner);
     return;
   }
   if (tool === 'pick') {
@@ -196,7 +222,7 @@ function refreshHover(e) {
 async function actAt(e, button) {
   const { ray, hit } = currentHit(e);
   const erasing = tool === 'erase' || button === 2 || e.shiftKey;
-  if (erasing && tool !== 'box') {
+  if (erasing && !['box', 'select', 'paste'].includes(tool)) {
     const labelId = view.labelAt(ray);
     if (labelId != null) {
       world.removeLabel(labelId);
@@ -204,6 +230,49 @@ async function actAt(e, button) {
     }
   }
   if (!hit) return;
+  if (tool === 'select') {
+    const corner = hit.cell || hit.prev;
+    if (!corner) return;
+    if (!selA) {
+      selA = corner;
+      selection = null;
+      view.showSelection(null);
+    } else {
+      selection = { a: selA, b: corner };
+      selA = null;
+      view.showRegion(null, null);
+      view.showSelection(selection.a, selection.b);
+      const w = Math.abs(selection.a[0] - selection.b[0]) + 1;
+      const h = Math.abs(selection.a[1] - selection.b[1]) + 1;
+      const d = Math.abs(selection.a[2] - selection.b[2]) + 1;
+      toast(`Selected ${w}×${h}×${d}. Now press 📋 Copy.`);
+    }
+    updateStatus();
+    return;
+  }
+  if (tool === 'paste') {
+    if (!clip) {
+      toast('Nothing copied yet — Select an area, then press 📋 Copy.');
+      return;
+    }
+    if (!hit.prev) return;
+    const origin = originFor(clip, hit.prev);
+    const key = origin.join(',');
+    if (e.pointerType === 'touch' && lastTapKey !== key) {
+      lastTapKey = key; // first tap just shows where it would go
+      toast('Tap the same spot again to place it, or tap elsewhere to move it.');
+      return;
+    }
+    lastTapKey = null;
+    const p = placement(world, clip, origin);
+    if (!p.fits) {
+      toast("That doesn't fit inside the diorama — move the footprint or 🔄 Rotate it.");
+      return;
+    }
+    world.setManyWithLabels(p.cells, p.labels);
+    toast(`Pasted ${p.cells.length} blocks. Click again to paste another, or press Done.`);
+    return;
+  }
   if (tool === 'pick') {
     if (hit.cell) {
       selectBlock(world.get(...hit.cell));
@@ -237,6 +306,29 @@ async function actAt(e, button) {
   } else if (hit.prev) {
     world.setMany([[...hit.prev, selected]]);
   }
+}
+
+function copySelection() {
+  if (!selection) {
+    toast('Select an area first: ⬚ Select, then click one corner and the opposite corner.');
+    setTool('select');
+    return;
+  }
+  clip = extract(world, selection.a, selection.b);
+  if (!clip.cells.length) {
+    clip = null;
+    toast('That area is empty — there is nothing to copy.');
+    return;
+  }
+  toast(`Copied ${clip.cells.length} blocks. Press 📌 Paste to place them.`);
+  updateStatus();
+}
+
+function rotateClip() {
+  if (!clip) return;
+  clip = rotate90(clip);
+  updateStatus();
+  refreshHover();
 }
 
 function wirePointer(canvas) {
@@ -364,7 +456,18 @@ function wireUI() {
     b.type = 'button';
     b.addEventListener('click', () => b.closest('dialog').close('cancel'));
   });
-  $$('[data-tool]').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
+  $$('[data-tool]').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (b.dataset.tool === 'paste' && !clip) {
+        toast('Nothing copied yet — Select an area, then press 📋 Copy.');
+        return;
+      }
+      setTool(b.dataset.tool);
+    }),
+  );
+  $('#copyBtn').addEventListener('click', copySelection);
+  $('#rotateBtn').addEventListener('click', rotateClip);
+  $('#cancelPasteBtn').addEventListener('click', () => setTool('build'));
   $$('[data-sky]').forEach((b) =>
     b.addEventListener('click', () => {
       view.setSky(b.dataset.sky);
@@ -454,6 +557,16 @@ function wireUI() {
     } else if (mod && key === 'y') {
       e.preventDefault();
       world.redo();
+    } else if (mod && key === 'c') {
+      if (selection) {
+        e.preventDefault();
+        copySelection();
+      }
+    } else if (mod && key === 'v') {
+      if (clip) {
+        e.preventDefault();
+        setTool('paste');
+      }
     } else if (mod) {
       return;
     } else if (/^[1-9]$/.test(e.key)) {
@@ -461,12 +574,20 @@ function wireUI() {
     } else if (key === 'b') setTool('build');
     else if (key === 'e') setTool('erase');
     else if (key === 'x') setTool('box');
+    else if (key === 's') setTool('select');
+    else if (key === 'c') copySelection();
+    else if (key === 'p') clip ? setTool('paste') : toast('Nothing copied yet — Select an area, then press 📋 Copy.');
+    else if (key === 'q') rotateClip();
     else if (key === 'i') setTool('pick');
     else if (key === 't') setTool('label');
     else if (key === 'r') toggleSpin();
     else if (e.key === 'Escape') {
       boxA = null;
+      selA = null;
+      selection = null;
       view.showRegion(null, null);
+      view.showSelection(null);
+      if (tool === 'paste' || tool === 'select') setTool('build');
       updateStatus();
     }
   });

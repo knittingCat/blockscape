@@ -125,4 +125,58 @@ await test('random scene survives a round trip', async () => {
   assert.deepEqual(back.cells, w.cells);
 });
 
+const { extract, rotate90, originFor, placement, normalizeBox } = await import('../src/clipboard.js');
+
+await test('extract copies only blocks and labels inside the box', () => {
+  const w = new World(16);
+  w.setMany([[2, 0, 2, 5], [3, 1, 2, 6], [9, 0, 9, 7]]);
+  w.addLabel(3, 2, 3, 'in');
+  w.addLabel(12, 0, 12, 'out');
+  const clip = extract(w, [3, 1, 3], [2, 0, 2]); // corners in any order
+  assert.deepEqual([clip.w, clip.h, clip.d], [2, 2, 2]);
+  assert.equal(clip.cells.length, 2);
+  assert.ok(clip.cells.some(([x, y, z, id]) => x === 0 && y === 0 && z === 0 && id === 5));
+  assert.ok(clip.cells.some(([x, y, z, id]) => x === 1 && y === 1 && z === 0 && id === 6));
+  assert.equal(clip.labels.length, 0); // label at y=2 is above the box
+  assert.deepEqual(normalizeBox([5, 1, 9], [2, 4, 3]), { min: [2, 1, 3], max: [5, 4, 9] });
+});
+
+await test('rotate90 four times returns the original; dimensions swap', () => {
+  const w = new World(16);
+  w.setMany([[0, 0, 0, 1], [2, 0, 0, 2], [0, 1, 1, 3]]);
+  w.addLabel(2, 0, 1, 'sign');
+  const clip = extract(w, [0, 0, 0], [2, 1, 1]);
+  const r1 = rotate90(clip);
+  assert.deepEqual([r1.w, r1.h, r1.d], [2, 2, 3]);
+  let r = clip;
+  for (let i = 0; i < 4; i++) r = rotate90(r);
+  const key = (c) => JSON.stringify([c.w, c.h, c.d, [...c.cells].sort(), c.labels]);
+  assert.equal(key(r), key(clip));
+  // every rotated cell stays inside the new box
+  for (const [x, y, z] of r1.cells) assert.ok(x >= 0 && x < r1.w && y >= 0 && y < r1.h && z >= 0 && z < r1.d);
+});
+
+await test('paste: placement, fit check, one undo step including labels', () => {
+  const w = new World(16);
+  w.fillBox([0, 0, 0], [2, 1, 2], 4);
+  w.addLabel(1, 2, 1, 'house');
+  const clip = extract(w, [0, 0, 0], [2, 2, 2]);
+  const origin = originFor(clip, [8, 0, 8]);
+  assert.deepEqual(origin, [7, 0, 7]);
+  const p = placement(w, clip, origin);
+  assert.equal(p.fits, true);
+  const before = w.count();
+  w.setManyWithLabels(p.cells, p.labels);
+  assert.equal(w.count(), before + clip.cells.length);
+  assert.equal(w.labels.length, 2);
+  assert.equal(w.get(8, 1, 8), 4);
+  assert.ok(w.undo()); // a single undo removes blocks AND the copied label
+  assert.equal(w.count(), before);
+  assert.equal(w.labels.length, 1);
+  assert.ok(w.redo());
+  assert.equal(w.labels.length, 2);
+  assert.equal(placement(w, clip, [14, 0, 14]).fits, false); // sticks out of the world
+  assert.equal(placement(w, clip, [7, 31, 7]).fits, false); // too tall
+});
+
 console.log(`${n} tests passed`);

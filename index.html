@@ -15,9 +15,12 @@
     <div class="group" id="tools" role="toolbar" aria-label="Tools">
       <button data-tool="build" title="Place blocks (B) · right-click or Shift-click removes">🧱 <span>Build</span></button>
       <button data-tool="erase" title="Remove blocks (E)">🧽 <span>Erase</span></button>
+      <button data-tool="select" title="Select an area: click one corner, then the opposite corner (S)">⬚ <span>Select</span></button>
       <button data-tool="box" title="Fill a box: click two corners (X) · hold Shift on the second click to clear a box">📦 <span>Box</span></button>
       <button data-tool="pick" title="Pick a block from the scene (I)">👆 <span>Pick</span></button>
       <button data-tool="label" title="Add a text sign (T)">🏷️ <span>Sign</span></button>
+      <button id="copyBtn" title="Copy the selected area (C or Cmd/Ctrl+C)">📋 <span>Copy</span></button>
+      <button data-tool="paste" title="Paste: choose the footprint, then click to place it (P or Cmd/Ctrl+V)">📌 <span>Paste</span></button>
     </div>
     <div class="group">
       <button id="undo" title="Undo (Cmd/Ctrl+Z)">↩️ <span>Undo</span></button>
@@ -52,6 +55,11 @@
   </div>
 
   <main id="stage"></main>
+  <div id="pasteBar" hidden>
+    <span>Choose the footprint, then click to place it</span>
+    <button id="rotateBtn" title="Turn it 90° (Q)">🔄 Rotate</button>
+    <button id="cancelPasteBtn">Done</button>
+  </div>
   <div id="status" aria-live="polite"></div>
   <div id="toast" role="status"></div>
 
@@ -107,11 +115,12 @@
         <li><b>Remove a block:</b> right-click it, or hold Shift and click. (The 🧽 Erase tool does the same.)</li>
         <li><b>Build fast:</b> 📦 Box fills a whole area — click one corner, then the opposite corner. Hold Shift on the second click to clear a box.</li>
         <li><b>Copy a block:</b> 👆 Pick takes the block you click on.</li>
+        <li><b>Copy and paste:</b> ⬚ Select — click one corner, then the opposite corner. Then 📋 Copy. Then 📌 Paste: a green footprint follows your pointer — move it where you want, click to place it, 🔄 Rotate (or Q) to turn it. Click Done or press Esc when finished.</li>
         <li><b>Name things:</b> 🏷️ Sign puts floating text in your scene.</li>
         <li><b>Mistake?</b> Cmd/Ctrl+Z undoes it.</li>
         <li><b>Share it:</b> 📸 Picture saves a PNG you can attach to a post. 🔗 Share link copies a link so classmates can walk around your scene.</li>
       </ul>
-      <p class="hint">Keys: 1–9 pick blocks · B build · E erase · X box · I pick · T sign · R spin. Your diorama saves itself in this browser.</p>
+      <p class="hint">Keys: 1–9 pick blocks · B build · E erase · X box · S select · C copy · P paste · I pick · T sign · R spin. Your diorama saves itself in this browser.</p>
       <div class="row"><button value="ok" class="primary">Got it</button></div>
     </form>
   </dialog>

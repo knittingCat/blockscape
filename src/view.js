@@ -136,6 +136,22 @@ export class DioramaView {
     this.ghost.renderOrder = 5;
     this.helpers.add(this.ghost);
 
+    // selected area (cyan) and paste footprint (green/red plate + outline)
+    this.selection = new THREE.Group();
+    this.selection.add(
+      new THREE.LineSegments(new THREE.EdgesGeometry(this.geometry), new THREE.LineBasicMaterial({ color: 0x4dd0e1 })),
+      new THREE.Mesh(this.geometry, new THREE.MeshBasicMaterial({ color: 0x4dd0e1, transparent: true, opacity: 0.14, depthWrite: false })),
+    );
+    this.selection.visible = false;
+    this.footprint = new THREE.Group();
+    this.footprintEdges = new THREE.LineSegments(new THREE.EdgesGeometry(this.geometry), new THREE.LineBasicMaterial({ color: 0xffffff }));
+    this.footprintBody = new THREE.Mesh(this.geometry, new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.12, depthWrite: false }));
+    this.footprintPlate = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }));
+    this.footprintPlate.rotation.x = -Math.PI / 2;
+    this.footprint.add(this.footprintEdges, this.footprintBody, this.footprintPlate);
+    this.footprint.visible = false;
+    this.helpers.add(this.selection, this.footprint);
+
     this.region = new THREE.LineSegments(new THREE.EdgesGeometry(this.geometry), new THREE.LineBasicMaterial({ color: 0xffd23f }));
     this.region.visible = false;
     this.helpers.add(this.region);
@@ -392,6 +408,41 @@ export class DioramaView {
     this.region.scale.set(hi[0] - lo[0] + 0.02, hi[1] - lo[1] + 0.02, hi[2] - lo[2] + 0.02);
     this.region.position.set((lo[0] + hi[0]) / 2 - off, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2 - off);
     this.region.visible = true;
+  }
+
+  showSelection(a, b) {
+    this.dirty = true;
+    if (!a || !b) {
+      this.selection.visible = false;
+      return;
+    }
+    const off = this.offset;
+    const lo = [0, 1, 2].map((i) => Math.min(a[i], b[i]));
+    const hi = [0, 1, 2].map((i) => Math.max(a[i], b[i]) + 1);
+    this.selection.scale.set(hi[0] - lo[0] + 0.03, hi[1] - lo[1] + 0.03, hi[2] - lo[2] + 0.03);
+    this.selection.position.set((lo[0] + hi[0]) / 2 - off, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2 - off);
+    this.selection.visible = true;
+  }
+
+  // Where a pasted clip (w x h x d) would land with its corner at `origin`; ok=false turns it red.
+  showFootprint(size, origin, ok) {
+    this.dirty = true;
+    if (!size || !origin) {
+      this.footprint.visible = false;
+      return;
+    }
+    const off = this.offset;
+    const [w, h, d] = size;
+    this.footprint.position.set(origin[0] + w / 2 - off, origin[1] + h / 2, origin[2] + d / 2 - off);
+    this.footprintEdges.scale.set(w + 0.02, h + 0.02, d + 0.02);
+    this.footprintBody.scale.set(w, h, d);
+    this.footprintPlate.scale.set(w, d, 1);
+    this.footprintPlate.position.set(0, -h / 2 + 0.04, 0);
+    const color = ok ? 0x34d399 : 0xff5c5c;
+    this.footprintBody.material.color.set(color);
+    this.footprintPlate.material.color.set(color);
+    this.footprintEdges.material.color.set(ok ? 0xffffff : 0xff8a8a);
+    this.footprint.visible = true;
   }
 
   setGhostTint(block) {
