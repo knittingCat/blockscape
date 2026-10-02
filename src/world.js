@@ -2,6 +2,42 @@
 // A cell occupies [x, x+1] x [y, y+1] x [z, z+1]; the diorama stand's top surface is the plane y = 0.
 
 export const HEIGHT = 32;
+
+// ---- people (decorative figures with a customizable outfit; not part of the block grid) ----
+export const PERSON_CHOICES = {
+  hairStyle: ['none', 'short', 'long'],
+  sleeves: ['short', 'long', 'none'],
+  bottoms: ['pants', 'shorts', 'skirt'],
+  hat: ['none', 'cap', 'beanie', 'tophat', 'crown'],
+};
+export const PERSON_DEFAULTS = {
+  rot: 0,
+  skin: '#f1c27d',
+  hair: '#3b2a1a',
+  hairStyle: 'short',
+  shirt: '#3b82f6',
+  pants: '#374151',
+  shoes: '#111827',
+  sleeves: 'short',
+  bottoms: 'pants',
+  hat: 'none',
+  hatColor: '#e11d48',
+  name: '',
+};
+const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+// Keep only valid values (used for anything loaded from a file, link or the server).
+export function cleanPerson(p) {
+  const out = { ...PERSON_DEFAULTS };
+  for (const key of ['skin', 'hair', 'shirt', 'pants', 'shoes', 'hatColor']) if (COLOR_RE.test(p[key])) out[key] = p[key].toLowerCase();
+  for (const key of Object.keys(PERSON_CHOICES)) if (PERSON_CHOICES[key].includes(p[key])) out[key] = p[key];
+  out.rot = Number.isInteger(p.rot) ? ((p.rot % 4) + 4) % 4 : 0;
+  out.name = typeof p.name === 'string' ? p.name.slice(0, 30) : '';
+  out.x = Number(p.x);
+  out.y = Number(p.y);
+  out.z = Number(p.z);
+  return out;
+}
 export const SIZES = { small: 24, medium: 32, large: 48 };
 
 export class World {
@@ -10,6 +46,8 @@ export class World {
     this.height = HEIGHT;
     this.cells = new Uint8Array(size * size * HEIGHT); // 0 = empty, otherwise a block id
     this.labels = []; // { id, x, y, z, text }
+    this.people = []; // { id, x, y, z, rot, skin, hair, ... } see PERSON_DEFAULTS
+    this.nextPersonId = 1;
     this.meta = { sky: 'day', title: '', subtitle: '' };
     this.undoStack = [];
     this.redoStack = [];
@@ -93,7 +131,8 @@ export class World {
   }
 
   // Remove every block and sign inside the box (corners in any order) as ONE undo step.
-  clearRegion(a, b) {
+  // keep(x, y, z, id) => true leaves that block alone (used so Clear keeps the automatic grass floor).
+  clearRegion(a, b, { keep = null } = {}) {
     const lo = [0, 1, 2].map((i) => Math.min(a[i], b[i]));
     const hi = [0, 1, 2].map((i) => Math.max(a[i], b[i]));
     const changes = [];
@@ -101,7 +140,7 @@ export class World {
       for (let z = Math.max(lo[2], 0); z <= Math.min(hi[2], this.size - 1); z++) {
         for (let x = Math.max(lo[0], 0); x <= Math.min(hi[0], this.size - 1); x++) {
           const i = this.index(x, y, z);
-          if (this.cells[i]) {
+          if (this.cells[i] && !(keep && keep(x, y, z, this.cells[i]))) {
             changes.push({ i, from: this.cells[i], to: 0 });
             this.cells[i] = 0;
           }
@@ -111,12 +150,15 @@ export class World {
     const inside = (l) => l.x >= lo[0] && l.x <= hi[0] && l.y >= lo[1] && l.y <= hi[1] && l.z >= lo[2] && l.z <= hi[2];
     const labelsRemove = this.labels.filter(inside);
     this.labels = this.labels.filter((l) => !inside(l));
-    if (!changes.length && !labelsRemove.length) return { blocks: 0, labels: 0 };
-    this.undoStack.push({ cells: changes, labelsRemove });
+    const peopleRemove = this.people.filter(inside).map((p) => ({ ...p }));
+    this.people = this.people.filter((p) => !inside(p));
+    if (!changes.length && !labelsRemove.length && !peopleRemove.length) return { blocks: 0, labels: 0, people: 0 };
+    this.undoStack.push({ cells: changes, labelsRemove, peopleRemove });
     this.redoStack.length = 0;
     if (changes.length) this.emit({ type: 'cells', changes });
     if (labelsRemove.length) this.emit({ type: 'labels' });
-    return { blocks: changes.length, labels: labelsRemove.length };
+    if (peopleRemove.length) this.emit({ type: 'people' });
+    return { blocks: changes.length, labels: labelsRemove.length, people: peopleRemove.length };
   }
 
   boxCells(a, b) {
@@ -156,6 +198,51 @@ export class World {
     return true;
   }
 
+  // ----- people -----
+  addPerson(props, { record = true, id } = {}) {
+    const p = cleanPerson(props);
+    if (!Number.isInteger(p.x) || !Number.isInteger(p.y) || !Number.isInteger(p.z) || !this.inBounds(p.x, p.y, p.z)) return null;
+    p.id = id ?? this.nextPersonId++;
+    this.nextPersonId = Math.max(this.nextPersonId, p.id + 1);
+    this.people.push(p);
+    if (record) {
+      this.undoStack.push({ personAdd: { ...p } });
+      this.redoStack.length = 0;
+    }
+    this.emit({ type: 'people' });
+    return p;
+  }
+  removePerson(id, { record = true } = {}) {
+    const k = this.people.findIndex((p) => p.id === id);
+    if (k < 0) return false;
+    const [p] = this.people.splice(k, 1);
+    if (record) {
+      this.undoStack.push({ personRemove: { ...p } });
+      this.redoStack.length = 0;
+    }
+    this.emit({ type: 'people' });
+    return true;
+  }
+  getPerson(id) {
+    return this.people.find((p) => p.id === id) || null;
+  }
+  // Live edits while a customize window is open: not recorded; call recordPersonEdit when done.
+  updatePerson(id, changes) {
+    const p = this.getPerson(id);
+    if (!p) return null;
+    Object.assign(p, cleanPerson({ ...p, ...changes }), { id: p.id });
+    this.emit({ type: 'people' });
+    return p;
+  }
+  // One undo step for everything changed since `before` (a copy of the person taken when editing began).
+  recordPersonEdit(id, before) {
+    const now = this.getPerson(id);
+    if (!now || JSON.stringify(before) === JSON.stringify(now)) return false;
+    this.undoStack.push({ personUpdate: { before: { ...before }, after: { ...now } } });
+    this.redoStack.length = 0;
+    return true;
+  }
+
   // ----- history -----
   undo() {
     const step = this.undoStack.pop();
@@ -182,6 +269,22 @@ export class World {
         }
       }
       this.emit({ type: 'cells', changes });
+    }
+    if (step.personAdd) {
+      if (reverse) this.removePerson(step.personAdd.id, { record: false });
+      else this.addPerson(step.personAdd, { record: false, id: step.personAdd.id });
+    }
+    if (step.personRemove) {
+      if (reverse) this.addPerson(step.personRemove, { record: false, id: step.personRemove.id });
+      else this.removePerson(step.personRemove.id, { record: false });
+    }
+    if (step.personUpdate) {
+      const target = reverse ? step.personUpdate.before : step.personUpdate.after;
+      this.updatePerson(target.id, target);
+    }
+    if (step.peopleRemove) {
+      if (reverse) for (const p of step.peopleRemove) this.addPerson(p, { record: false, id: p.id });
+      else for (const p of step.peopleRemove) this.removePerson(p.id, { record: false });
     }
     if (step.labelsRemove) {
       if (reverse) for (const l of step.labelsRemove) this.addLabel(l.x, l.y, l.z, l.text, { record: false, id: l.id });
@@ -280,7 +383,7 @@ export class World {
     }
     varint(run);
     out.push(cur);
-    const json = new TextEncoder().encode(JSON.stringify({ labels: this.labels, meta: this.meta }));
+    const json = new TextEncoder().encode(JSON.stringify({ labels: this.labels, meta: this.meta, people: this.people }));
     const header = [];
     let n = json.length;
     while (n >= 128) {
@@ -320,6 +423,7 @@ export class World {
     const jsonLen = varint();
     const json = JSON.parse(new TextDecoder().decode(bytes.subarray(pos, pos + jsonLen)));
     for (const l of json.labels || []) world.addLabel(l.x, l.y, l.z, String(l.text).slice(0, 80), { record: false, id: l.id });
+    for (const p of json.people || []) world.addPerson({ ...p }, { record: false, id: Number.isInteger(p.id) ? p.id : undefined });
     Object.assign(world.meta, json.meta || {});
     return world;
   }

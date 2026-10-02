@@ -453,15 +453,26 @@ function copySelection(prefix = '') {
 
 // Remove every block and sign. One undo step brings everything back.
 function clearAll() {
-  if (!world.count() && !world.labels.length) {
-    toast('The diorama is already empty.');
+  // The automatic grass floor stays; use Select + Delete if you really want to remove it too.
+  const keepGrass = (x, y, z, id) => y === 0 && id === 1;
+  let anything = world.labels.length > 0 || world.people.length > 0;
+  for (let i = 0; i < world.cells.length && !anything; i++) {
+    const id = world.cells[i];
+    if (id) {
+      const [x, y, z] = world.coords(i);
+      if (!keepGrass(x, y, z, id)) anything = true;
+    }
+  }
+  if (!anything) {
+    toast('Nothing to clear — the grass floor stays.');
     return;
   }
-  if (!confirm('Clear everything in this diorama? You can undo it with Cmd/Ctrl+Z.')) return;
-  const r = world.clearRegion([0, 0, 0], [world.size - 1, world.height - 1, world.size - 1]);
+  if (!confirm('Clear everything you built? The grass floor stays. You can undo this with Cmd/Ctrl+Z.')) return;
+  const r = world.clearRegion([0, 0, 0], [world.size - 1, world.height - 1, world.size - 1], { keep: keepGrass });
   selection = null;
   view.showSelection(null);
-  toast(`Cleared ${r.blocks} blocks${r.labels ? ` and ${r.labels} sign${r.labels > 1 ? 's' : ''}` : ''}. Cmd/Ctrl+Z brings them back.`);
+  const extra = [r.labels ? `${r.labels} sign${r.labels > 1 ? 's' : ''}` : '', r.people ? `${r.people} ${r.people > 1 ? 'people' : 'person'}` : ''].filter(Boolean).join(' and ');
+  toast(`Cleared ${r.blocks} blocks${extra ? ' and ' + extra : ''}. The grass floor stays. Cmd/Ctrl+Z brings it all back.`);
   updateStatus();
 }
 

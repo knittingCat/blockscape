@@ -10,7 +10,7 @@ Made for projects like "illustrate your favourite scene from a story".
 - **Place a block:** pick one at the bottom, then click the ground or another block.
 - **Remove a block:** right-click it, or hold Shift and click.
 - **Tools:** Build · Erase · Box (click two corners to fill an area, Shift on the second click clears it) · Pick (copy a block) · Sign (floating text).
-- **Undo / redo:** Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z. The **Clear** (trash can) button empties the whole diorama and can be undone.
+- **Undo / redo:** Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z. The **Clear** (trash can) button removes everything you built but keeps the grass floor, and can be undone.
 - **Keys:** `1`–`9` pick blocks, `B` build, `P` place a block at the pointer, `M` mirror the copied structure, `Y` build symmetrically, `Q` rotate it, `E` erase, `X` box, `I` pick, `T` sign.
 - **Save / share:** Picture (PNG with an optional title and caption), Share link (the whole scene is inside the link), Save / Open (a `.blockscape` file). Your diorama also saves itself in the browser.
 

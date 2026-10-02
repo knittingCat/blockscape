@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { World, encodeWorld, decodeWorld } from '../src/world.js';
+import { World, encodeWorld, decodeWorld, cleanPerson, PERSON_DEFAULTS } from '../src/world.js';
 
 let n = 0;
 const test = async (name, fn) => {
@@ -125,6 +125,74 @@ await test('random scene survives a round trip', async () => {
   assert.deepEqual(back.cells, w.cells);
 });
 
+await test('clearRegion can keep the grass floor', () => {
+  const w = new World(8);
+  w.fillBox([0, 0, 0], [7, 0, 7], 1); // grass floor
+  w.fillBox([2, 1, 2], [3, 3, 3], 4); // a building
+  w.setMany([[4, 0, 4, 4]]); // a cobblestone block sitting in the floor layer
+  const keepGrass = (x, y, z, id) => y === 0 && id === 1;
+  const r = w.clearRegion([0, 0, 0], [7, 31, 7], { keep: keepGrass });
+  assert.equal(r.blocks, 2 * 3 * 2 + 1); // the building and the stray block; not the grass
+  assert.equal(w.get(0, 0, 0), 1);
+  assert.equal(w.get(4, 0, 4), 0);
+  assert.equal(w.count(), 63);
+  assert.ok(w.undo());
+  assert.equal(w.get(4, 0, 4), 4);
+  assert.equal(w.count(), 64 + 12);
+});
+
+await test('people: add, customize, remove, with undo and redo', () => {
+  const w = new World(16);
+  const p = w.addPerson({ x: 3, y: 0, z: 4, shirt: '#ff0000', hat: 'crown', name: 'King' });
+  assert.equal(w.people.length, 1);
+  assert.equal(p.shirt, '#ff0000');
+  assert.equal(p.pants, PERSON_DEFAULTS.pants); // defaults fill the rest
+  assert.equal(w.addPerson({ x: 99, y: 0, z: 0 }), null); // outside the diorama
+  const before = { ...w.getPerson(p.id) };
+  w.updatePerson(p.id, { shirt: '#00ff00', hairStyle: 'long', rot: 5 });
+  assert.equal(w.getPerson(p.id).rot, 1); // turns wrap around
+  assert.equal(w.recordPersonEdit(p.id, before), true);
+  assert.equal(w.recordPersonEdit(p.id, w.getPerson(p.id)), false); // nothing new to record
+  assert.ok(w.undo()); // undo the outfit change
+  assert.equal(w.getPerson(p.id).shirt, '#ff0000');
+  assert.ok(w.redo());
+  assert.equal(w.getPerson(p.id).shirt, '#00ff00');
+  assert.ok(w.removePerson(p.id));
+  assert.equal(w.people.length, 0);
+  assert.ok(w.undo()); // the person comes back with the same outfit
+  assert.equal(w.getPerson(p.id).hairStyle, 'long');
+  assert.equal(w.getPerson(p.id).name, 'King');
+});
+
+await test('people: invalid values are cleaned, and they survive saving', async () => {
+  const c = cleanPerson({ x: 1, y: 0, z: 1, shirt: 'red', hat: 'sombrero', skin: '#ABCDEF', name: 'x'.repeat(100), rot: -1 });
+  assert.equal(c.shirt, PERSON_DEFAULTS.shirt);
+  assert.equal(c.hat, 'none');
+  assert.equal(c.skin, '#abcdef');
+  assert.equal(c.name.length, 30);
+  assert.equal(c.rot, 3);
+  const w = new World(16);
+  w.addPerson({ x: 2, y: 1, z: 3, hair: '#112233', bottoms: 'skirt', name: 'Ada' });
+  w.addPerson({ x: 5, y: 0, z: 5, hat: 'tophat', hatColor: '#000000' });
+  const back = await decodeWorld(await encodeWorld(w));
+  assert.equal(back.people.length, 2);
+  assert.equal(back.people[0].bottoms, 'skirt');
+  assert.equal(back.people[0].name, 'Ada');
+  assert.equal(back.people[1].hat, 'tophat');
+  assert.equal(back.nextPersonId, 3);
+});
+
+await test('clearRegion also removes people standing inside it (and undo restores them)', () => {
+  const w = new World(16);
+  w.addPerson({ x: 2, y: 0, z: 2 });
+  w.addPerson({ x: 12, y: 0, z: 12 });
+  const r = w.clearRegion([0, 0, 0], [5, 3, 5]);
+  assert.equal(r.people, 1);
+  assert.equal(w.people.length, 1);
+  assert.ok(w.undo());
+  assert.equal(w.people.length, 2);
+});
+
 const { symmetricCells, extract, rotate90, mirrorX, originFor, placement, normalizeBox } = await import('../src/clipboard.js');
 
 await test('extract copies only blocks and labels inside the box', () => {
@@ -214,7 +282,7 @@ await test('clearRegion deletes blocks and signs inside only, in one undo step',
   w.addLabel(9, 0, 9, 'outside');
   const before = w.count();
   const r = w.clearRegion([4, 2, 4], [1, 0, 1]); // corners in any order
-  assert.deepEqual(r, { blocks: 4 * 3 * 4, labels: 0 }); // the sign at y=3 is above the box
+  assert.deepEqual(r, { blocks: 4 * 3 * 4, labels: 0, people: 0 }); // the sign at y=3 is above the box
   assert.equal(w.count(), before - 48);
   assert.equal(w.get(0, 0, 0), 3); // outside the box is untouched
   const r2 = w.clearRegion([0, 0, 0], [5, 3, 5]);
@@ -226,7 +294,7 @@ await test('clearRegion deletes blocks and signs inside only, in one undo step',
   assert.equal(w.count(), before - 48);
   assert.ok(w.redo());
   assert.equal(w.count(), 0);
-  assert.deepEqual(w.clearRegion([0, 0, 0], [5, 3, 5]), { blocks: 0, labels: 0 }); // nothing left: no history entry
+  assert.deepEqual(w.clearRegion([0, 0, 0], [5, 3, 5]), { blocks: 0, labels: 0, people: 0 }); // nothing left: no history entry
   const steps = w.undoStack.length;
   w.clearRegion([0, 0, 0], [1, 1, 1]);
   assert.equal(w.undoStack.length, steps);
