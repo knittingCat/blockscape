@@ -204,6 +204,70 @@ try {
     assert.equal(left.rows[0].n, 0); // reports go away with the diorama
   });
 
+  await test('reports about a non-admin go to admins; admins review them in the app', async () => {
+    // cat_mod is an admin (from the test above). ann (not admin) owns the gallery diorama made earlier? it was deleted, so make one.
+    const made = await ann.call('POST', '/api/dioramas', { title: 'Ann scene', data: DATA, visibility: 'gallery' });
+    assert.equal(made.status, 200);
+    assert.equal((await ben.call('POST', '/api/report', { dioramaId: made.json.id, reason: 'Odd sign' })).status, 200);
+    const mod = await cat.call('GET', '/api/reports');
+    assert.equal(mod.json.reports.length, 1);
+    assert.equal(mod.json.reports[0].title, 'Ann scene');
+    assert.equal(mod.json.reports[0].reporter, 'ben'); // admins see who reported
+    assert.equal((await cat.call('GET', '/api/me')).json.user.pendingReports, 1);
+    assert.equal((await ann.call('GET', '/api/reports')).json.reports.length, 0); // the owner never sees reports about herself
+    assert.equal((await ben.call('GET', '/api/reports')).json.reports.length, 0); // not an admin, not assigned
+    const rid = mod.json.reports[0].id;
+    assert.equal((await ben.call('POST', `/api/reports/${rid}/action`, { action: 'dismiss' })).status, 404);
+    assert.equal((await cat.call('POST', `/api/reports/${rid}/action`, { action: 'hide' })).status, 200);
+    assert.equal((await cat.call('GET', '/api/reports')).json.reports.length, 0);
+    assert.equal((await ben.call('GET', `/api/dioramas/${made.json.id}`)).status, 404); // hidden from the gallery now
+    assert.equal((await ann.call('GET', `/api/dioramas/${made.json.id}`)).json.visibility, 'private');
+    assert.equal((await cat.call('GET', '/api/me')).json.user.pendingReports, 0);
+  });
+
+  await test('a report about an admin goes to ANOTHER admin, never the owner or the reporter', async () => {
+    const dee = new Client();
+    await dee.call('POST', '/api/signup', { username: 'dee_admin', password: 'longenough4' });
+    await query(`UPDATE ${T.users} SET is_admin = TRUE WHERE username = 'dee_admin'`);
+    const made = await dee.call('POST', '/api/dioramas', { title: 'Dee scene', data: DATA, visibility: 'gallery' });
+    assert.equal((await ben.call('POST', '/api/report', { dioramaId: made.json.id, reason: 'Bad word' })).status, 200);
+    const { rows } = await query(`SELECT r.id, u.username FROM ${T.reports} r JOIN ${T.users} u ON u.id = r.assigned_to WHERE r.diorama_id = $1`, [made.json.id]);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].username, 'cat_mod'); // the only other admin
+    assert.equal((await dee.call('GET', '/api/reports')).json.reports.length, 0); // dee never sees reports about her own diorama
+    const seen = await cat.call('GET', '/api/reports');
+    assert.equal(seen.json.reports.length, 1);
+    assert.equal(seen.json.reports[0].pickedForYou, true);
+    assert.equal((await cat.call('POST', `/api/reports/${rows[0].id}/action`, { action: 'dismiss' })).status, 200);
+    assert.equal((await cat.call('GET', '/api/reports')).json.reports.length, 0);
+    const done = await query(`SELECT status, handled_by FROM ${T.reports} WHERE id = $1`, [rows[0].id]);
+    assert.equal(done.rows[0].status, 'dismissed');
+    assert.ok(done.rows[0].handled_by);
+  });
+
+  await test('with no other admin, the report goes to a random other person who can review it', async () => {
+    await query(`UPDATE ${T.users} SET is_admin = FALSE WHERE username = 'cat_mod'`); // dee is now the only admin
+    const dee = new Client();
+    assert.equal((await dee.call('POST', '/api/login', { username: 'dee_admin', password: 'longenough4' })).status, 200);
+    const made = await dee.call('POST', '/api/dioramas', { title: 'Dee second', data: DATA, visibility: 'gallery' });
+    assert.equal((await ann.call('POST', '/api/report', { dioramaId: made.json.id, reason: 'Not nice' })).status, 200);
+    const { rows } = await query(`SELECT r.id, u.username FROM ${T.reports} r JOIN ${T.users} u ON u.id = r.assigned_to WHERE r.diorama_id = $1`, [made.json.id]);
+    assert.equal(rows.length, 1);
+    assert.ok(['ben', 'cat_mod'].includes(rows[0].username), `picked ${rows[0].username}`); // not dee (owner), not Ann (reporter)
+    const reviewer = rows[0].username === 'ben' ? ben : cat;
+    const other = rows[0].username === 'ben' ? cat : ben;
+    const list = await reviewer.call('GET', '/api/reports');
+    assert.equal(list.json.reports.length, 1);
+    assert.equal(list.json.reports[0].reporter, null); // a picked person does not see who reported
+    assert.equal((await other.call('GET', '/api/reports')).json.reports.length, 0);
+    // the picked person may open it even though they are not an admin; hide it first so only reviewers can
+    await query(`UPDATE ${T.dioramas} SET visibility = 'private' WHERE id = $1`, [made.json.id]);
+    assert.equal((await reviewer.call('GET', `/api/dioramas/${made.json.id}`)).status, 200);
+    assert.equal((await other.call('GET', `/api/dioramas/${made.json.id}`)).status, 404);
+    assert.equal((await reviewer.call('POST', `/api/reports/${rows[0].id}/action`, { action: 'delete' })).status, 200);
+    assert.equal((await dee.call('GET', `/api/dioramas/${made.json.id}`)).status, 404); // gone
+  });
+
   await test('brute-force protection on login', async () => {
     const attacker = new Client();
     let last;

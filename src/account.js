@@ -10,6 +10,7 @@ export async function initAccount(ctx) {
   const body = $('#panelBody');
   const accountBtn = $('#accountBtn');
   const galleryBtn = $('#galleryBtn');
+  const reportsBtn = $('#reportsBtn');
 
   if (!(await accountsAvailable())) return; // plain static copy: keep the buttons hidden
   let user = null;
@@ -17,6 +18,13 @@ export async function initAccount(ctx) {
 
   async function refreshMe() {
     user = (await api('GET', '/api/me')).user;
+    // The Reports button is for admins, and for anyone who was picked to look at a report.
+    const waiting = user ? user.pendingReports || 0 : 0;
+    reportsBtn.hidden = !(user && (user.isAdmin || waiting > 0));
+    const badge = $('.count', reportsBtn);
+    badge.hidden = waiting === 0;
+    badge.textContent = waiting;
+    reportsBtn.title = waiting ? `${waiting} report${waiting > 1 ? 's' : ''} waiting for review` : 'Reports waiting for review';
     $('span', accountBtn).textContent = user ? user.username : '';
     accountBtn.setAttribute('aria-label', user ? `Account: ${user.username}` : 'Sign in');
     accountBtn.title = user ? 'Your dioramas and settings' : 'Sign in or create an account';
@@ -296,6 +304,61 @@ export async function initAccount(ctx) {
     }
   }
 
+  // ---------- reviewing reports ----------
+  async function reportsView() {
+    open('<h2>Reports</h2><p class="hint">Loading…</p>', { wide: true });
+    try {
+      const { reports } = await api('GET', '/api/reports');
+      const when = (iso) => new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+      const el = open(
+        `<h2>Reports to review</h2>
+        <p class="hint">${user.isAdmin ? "You see reports about members' dioramas. A report about an admin's diorama goes to a different admin, or to a random person if there is no other admin, so you never review reports about your own." : 'You were picked to look at these reports. Open the diorama, then decide.'}</p>
+        ${
+          reports.length
+            ? reports
+                .map(
+                  (r) => `<div class="rrow" data-id="${r.id}">
+              <div><b>${esc(r.title)}</b> by ${esc(r.owner)}${r.visibility === 'gallery' ? '' : ' (hidden)'}</div>
+              <div class="reason">“${esc(r.reason)}”</div>
+              <div class="hint">${r.reporter ? 'Reported by ' + esc(r.reporter) + ' · ' : ''}${esc(when(r.createdAt))}${r.pickedForYou ? ' · you were picked to review this' : ''}</div>
+              <div class="dactions">
+                <button data-do="open" data-diorama="${r.dioramaId}">Open</button>
+                <button data-do="dismiss">Dismiss</button>
+                <button data-do="hide">Hide from gallery</button>
+                <button data-do="delete">Delete</button>
+              </div></div>`,
+                )
+                .join('')
+            : '<p class="hint">Nothing is waiting for you.</p>'
+        }
+        <div class="row"><button type="button" class="primary" data-act="close">Close</button></div>`,
+        { wide: true },
+      );
+      $('[data-act=close]', el).onclick = close;
+      el.querySelectorAll('.rrow').forEach((row) => {
+        const id = Number(row.dataset.id);
+        row.querySelectorAll('[data-do]').forEach((b) => {
+          b.onclick = async () => {
+            const what = b.dataset.do;
+            if (what === 'open') return openDiorama(Number(b.dataset.diorama));
+            if (what === 'delete' && !confirm('Delete this diorama for good? The owner will lose it.')) return;
+            try {
+              await api('POST', `/api/reports/${id}/action`, { action: what });
+              ctx.toast(what === 'dismiss' ? 'Report dismissed.' : what === 'hide' ? 'Hidden from the gallery.' : 'Diorama deleted.');
+              await refreshMe();
+              reportsView();
+            } catch (err) {
+              ctx.toast(err.message);
+            }
+          };
+        });
+      });
+    } catch (err) {
+      ctx.toast(err.message);
+      close();
+    }
+  }
+
   // ---------- report ----------
   function reportView(id, title) {
     const el = open(`
@@ -320,6 +383,7 @@ export async function initAccount(ctx) {
   }
 
   // ---------- toolbar ----------
+  reportsBtn.onclick = reportsView;
   accountBtn.onclick = () => (user ? mineView() : authView());
   galleryBtn.onclick = () => (user ? galleryView() : needSignIn('Sign in to see the gallery.', galleryView));
 

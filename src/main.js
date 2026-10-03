@@ -1,4 +1,4 @@
-import { World, SIZES, encodeWorld, decodeWorld } from './world.js';
+import { World, SIZES, encodeWorld, decodeWorld, PERSON_CHOICES } from './world.js';
 import { BLOCKS, BLOCK_BY_ID } from './blocks.js';
 import { textureCanvas, topTextureName } from './textures.js';
 import { DioramaView } from './view.js';
@@ -150,9 +150,10 @@ function saveSuffix() {
 }
 
 function updateStatus() {
-  const names = { build: 'Build', erase: 'Erase', box: 'Box fill', pick: 'Pick', label: 'Sign', select: 'Select', paste: 'Paste' };
+  const names = { build: 'Build', erase: 'Erase', box: 'Box fill', pick: 'Pick', label: 'Sign', select: 'Select', paste: 'Paste', person: 'Person' };
   let hint = tool === 'box' ? (boxA ? ' — click the opposite corner' : ' — click a first corner') : '';
   if (tool === 'select') hint = selA ? ' — click the opposite corner' : selection ? ' — copied — press Paste' : ' — click one corner of the area';
+  if (tool === 'person') hint = ' — click to put a person here, or click one to change their outfit';
   if (tool === 'paste') hint = clip ? ` — ${clip.w}×${clip.h}×${clip.d} footprint: move it, then click to place` : '';
   $('#status').textContent = `${world.count()} blocks · ${names[tool]}${hint} · ${BLOCK_BY_ID.get(selected).name}${symmetry !== 'off' ? ' · symmetry: ' + SYMMETRY_NAMES[symmetry] : ''}${saveSuffix() ? ' · ' + saveSuffix() : ''}`;
   $('#undo').disabled = !world.undoStack.length;
@@ -272,6 +273,105 @@ async function loadFromText(text, { shared = false, cloud: cloudInfo = null } = 
   updateBanner(shared);
 }
 
+// ---------- people ----------
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+const SKINS = ['#fde0c8', '#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#5c3a21'];
+const SHIRTS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f8fafc', '#111827'];
+const PANTS = ['#1f2937', '#374151', '#1e3a8a', '#7c2d12', '#3f6212', '#581c87', '#475569'];
+const HAIRS = ['#1c1917', '#3b2a1a', '#7c4a1e', '#c27a2c', '#e5c07b', '#b91c1c', '#9ca3af'];
+const CHOICE_LABELS = {
+  none: 'None', short: 'Short', long: 'Long', pants: 'Pants', shorts: 'Shorts', skirt: 'Skirt',
+  cap: 'Cap', beanie: 'Beanie', tophat: 'Top hat', crown: 'Crown',
+};
+const CHOICE_TITLES = { hairStyle: 'Hair', sleeves: 'Sleeves', bottoms: 'Bottoms', hat: 'Hat' };
+const SLEEVE_LABELS = { short: 'Short sleeves', long: 'Long sleeves', none: 'Sleeveless' };
+
+function randomOutfit() {
+  return {
+    skin: pick(SKINS),
+    hair: pick(HAIRS),
+    hairStyle: pick(['short', 'short', 'long', 'none']),
+    shirt: pick(SHIRTS),
+    pants: pick(PANTS),
+    shoes: pick(['#111827', '#78350f', '#f8fafc', '#b91c1c']),
+    sleeves: pick(['short', 'short', 'long', 'none']),
+    bottoms: pick(['pants', 'pants', 'shorts', 'skirt']),
+    hat: pick(['none', 'none', 'none', 'cap', 'beanie', 'tophat', 'crown']),
+    hatColor: pick(SHIRTS),
+  };
+}
+
+function openPersonDialog(id) {
+  const person = world.getPerson(id);
+  if (!person) return;
+  const before = { ...person };
+  const dlg = $('#personDialog');
+  const body = $('#personBody');
+  const select = (prop, label) =>
+    `<label>${label}<select data-prop="${prop}">${PERSON_CHOICES[prop]
+      .map((v) => `<option value="${v}">${(prop === 'sleeves' ? SLEEVE_LABELS : CHOICE_LABELS)[v]}</option>`)
+      .join('')}</select></label>`;
+  const color = (prop, label) => `<label>${label}<input type="color" data-prop="${prop}"></label>`;
+  body.innerHTML = `
+    <h2>Customize person</h2>
+    <div class="hint">Skin</div>
+    <div class="swatches">${SKINS.map((c) => `<button type="button" class="skin" data-skin="${c}" style="background:${c}" aria-label="Skin ${c}"></button>`).join('')}</div>
+    <div class="grid2">
+      ${select('hairStyle', 'Hair')}${color('hair', 'Hair color')}
+      ${select('hat', 'Hat')}${color('hatColor', 'Hat color')}
+      ${select('sleeves', 'Top')}${color('shirt', 'Top color')}
+      ${select('bottoms', 'Bottoms')}${color('pants', 'Bottoms color')}
+    </div>
+    ${color('shoes', 'Shoes')}
+    <label>Name (floats above their head)<input type="text" data-prop="name" maxlength="30" autocomplete="off" placeholder="optional"></label>
+    <div class="btnrow">
+      <button type="button" data-act="left">Turn left</button>
+      <button type="button" data-act="right">Turn right</button>
+      <button type="button" data-act="random">Surprise me</button>
+    </div>
+    <div class="btnrow">
+      <button type="button" data-act="delete">Remove person</button>
+      <button type="button" class="primary" data-act="done">Done</button>
+    </div>`;
+  const sync = () => {
+    const p = world.getPerson(id);
+    if (!p) return;
+    body.querySelectorAll('[data-prop]').forEach((el) => {
+      if (document.activeElement !== el || el.type === 'color') el.value = p[el.dataset.prop];
+    });
+    body.querySelectorAll('.skin').forEach((b) => b.classList.toggle('on', b.dataset.skin === p.skin));
+  };
+  sync();
+  body.querySelectorAll('[data-prop]').forEach((el) => el.addEventListener('input', () => world.updatePerson(id, { [el.dataset.prop]: el.value })));
+  body.querySelectorAll('.skin').forEach((b) =>
+    b.addEventListener('click', () => {
+      world.updatePerson(id, { skin: b.dataset.skin });
+      sync();
+    }),
+  );
+  body.querySelector('[data-act=left]').onclick = () => world.updatePerson(id, { rot: world.getPerson(id).rot + 3 });
+  body.querySelector('[data-act=right]').onclick = () => world.updatePerson(id, { rot: world.getPerson(id).rot + 1 });
+  body.querySelector('[data-act=random]').onclick = () => {
+    world.updatePerson(id, randomOutfit());
+    sync();
+  };
+  body.querySelector('[data-act=delete]').onclick = () => {
+    world.removePerson(id);
+    dlg.close('removed');
+  };
+  body.querySelector('[data-act=done]').onclick = () => dlg.close('done');
+  dlg.addEventListener(
+    'close',
+    () => {
+      if (world.getPerson(id)) world.recordPersonEdit(id, before); // one undo step for the whole outfit change
+      updateStatus();
+      refreshHover();
+    },
+    { once: true },
+  );
+  dlg.showModal();
+}
+
 // ---------- pointer handling ----------
 function currentHit(e) {
   const ray = view.rayFromPointer(e.clientX, e.clientY);
@@ -309,7 +409,9 @@ function refreshHover(e) {
     if (selA && corner) view.showRegion(selA, corner);
     return;
   }
-  if (tool === 'pick') {
+  if (tool === 'person') {
+    view.showGhost(hit.prev, { color: 0xffffff, opacity: 0.18 });
+  } else if (tool === 'pick') {
     view.showGhost(hit.cell, { color: 0xffffff, opacity: 0.25, scale: 1.03 });
   } else if (tool === 'label') {
     view.showGhost(hit.prev, { color: 0xffffff, opacity: 0.2 });
@@ -331,6 +433,12 @@ async function actAt(e, button) {
   if (isViewOnly()) return;
   const { ray, hit } = currentHit(e);
   const erasing = tool === 'erase' || button === 2 || e.shiftKey;
+  const personId = view.personAt(ray);
+  if (personId != null && !['box', 'select', 'paste'].includes(tool)) {
+    if (erasing) world.removePerson(personId);
+    else openPersonDialog(personId);
+    return;
+  }
   if (erasing && !['box', 'select', 'paste'].includes(tool)) {
     const labelId = view.labelAt(ray);
     if (labelId != null) {
@@ -339,6 +447,12 @@ async function actAt(e, button) {
     }
   }
   if (!hit) return;
+  if (tool === 'person') {
+    if (!hit.prev) return;
+    const person = world.addPerson({ x: hit.prev[0], y: hit.prev[1], z: hit.prev[2], ...randomOutfit(), rot: view.facingRot(hit.prev) });
+    if (person) openPersonDialog(person.id);
+    return;
+  }
   if (tool === 'select') {
     const corner = hit.cell || hit.prev;
     if (!corner) return;
@@ -770,6 +884,7 @@ function wireUI() {
     else if (key === 'c') copySelection();
     else if (key === 'p') placeAtPointer(e);
     else if (key === 'v') clip ? setTool('paste') : toast('Nothing to paste yet — use Select on an area first.');
+    else if (key === 'h') setTool('person');
     else if (key === 'q') rotateClip();
     else if (key === 'm') mirrorClip();
     else if (key === 'y') cycleSymmetry();
@@ -864,6 +979,17 @@ async function main() {
         cloudState = 'Autosaving to your account';
       }
     } catch {}
+  }
+  // ?cam=x,y,z,tx,ty,tz places the camera (used for test screenshots)
+  const camParam = new URLSearchParams(location.search).get('cam');
+  if (camParam) {
+    const n = camParam.split(',').map(Number);
+    if (n.length === 6 && n.every(Number.isFinite)) {
+      view.camera.position.set(n[0], n[1], n[2]);
+      view.controls.target.set(n[3], n[4], n[5]);
+      view.controls.update();
+      view.invalidate();
+    }
   }
   updateBanner(sharedMode);
   updateStatus();

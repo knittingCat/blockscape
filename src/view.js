@@ -15,6 +15,8 @@ export class DioramaView {
     this.world = world;
     this.typeMeshes = new Map(); // block id -> { mesh, capacity }
     this.labelSprites = new Map(); // label id -> Sprite
+    this.personGroups = new Map(); // person id -> { sig, group }
+    this.personMats = new Map(); // colour -> material (shared)
     this.textures = new Map();
     this.materials = new Map();
     this.geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -56,6 +58,7 @@ export class DioramaView {
     this.resetCamera();
     this.rebuildAll();
     this.rebuildLabels();
+    this.rebuildPeople();
 
     this.onResize = () => this.resize();
     window.addEventListener('resize', this.onResize);
@@ -65,6 +68,7 @@ export class DioramaView {
     world.onChange((e) => {
       if (e.type === 'cells') this.rebuild(new Set(e.changes.flatMap((c) => [c.from, c.to])));
       else if (e.type === 'labels') this.rebuildLabels();
+      else if (e.type === 'people') this.rebuildPeople();
     });
 
     this.loop = this.loop.bind(this);
@@ -294,10 +298,16 @@ export class DioramaView {
     this.typeMeshes.clear();
     for (const s of this.labelSprites.values()) this.scene.remove(s);
     this.labelSprites.clear();
+    for (const { group } of this.personGroups.values()) {
+      this.scene.remove(group);
+      this.disposePerson(group);
+    }
+    this.personGroups.clear();
     this.world = world;
     this.buildStage();
     this.rebuildAll();
     this.rebuildLabels();
+    this.rebuildPeople();
     this.setSky(world.meta.sky || 'day');
     this.resetCamera();
     this.showSymmetry(this.symMode || 'off'); // planes follow the new stand size
@@ -305,6 +315,7 @@ export class DioramaView {
       if (world !== this.world) return;
       if (e.type === 'cells') this.rebuild(new Set(e.changes.flatMap((c) => [c.from, c.to])));
       else if (e.type === 'labels') this.rebuildLabels();
+      else if (e.type === 'people') this.rebuildPeople();
     });
   }
 
@@ -367,6 +378,169 @@ export class DioramaView {
     sprite.center.set(0.5, 0); // the tail tip sits on the anchor point
     sprite.renderOrder = 10;
     return sprite;
+  }
+
+  // ----- people -----
+  mat(hex) {
+    if (!this.personMats.has(hex)) this.personMats.set(hex, new THREE.MeshLambertMaterial({ color: hex }));
+    return this.personMats.get(hex);
+  }
+
+  faceTexture(skin) {
+    // 8x8 pixel face: two eyes and a mouth on the skin colour
+    const c = document.createElement('canvas');
+    c.width = c.height = 8;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = skin;
+    ctx.fillRect(0, 0, 8, 8);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(1, 3, 2, 1);
+    ctx.fillRect(5, 3, 2, 1);
+    ctx.fillStyle = '#2b2118';
+    ctx.fillRect(2, 3, 1, 1);
+    ctx.fillRect(5, 3, 1, 1);
+    ctx.fillStyle = 'rgba(120, 40, 40, 0.85)';
+    ctx.fillRect(3, 5, 2, 1);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.NearestFilter;
+    return t;
+  }
+
+  // A blocky figure standing on the floor of its cell. Total height is about 1.7 cells.
+  buildPerson(p) {
+    const g = new THREE.Group();
+    const add = (w, h, d, x, y, z, hex, face) => {
+      const m = new THREE.Mesh(this.geometry, face ? [this.mat(hex), this.mat(hex), this.mat(hex), this.mat(hex), face, this.mat(hex)] : this.mat(hex));
+      m.scale.set(w, h, d);
+      m.position.set(x, y + h / 2, z);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      g.add(m);
+      return m;
+    };
+    // legs and shoes
+    for (const sx of [-0.13, 0.13]) {
+      if (p.bottoms === 'pants') add(0.24, 0.7, 0.28, sx, 0, 0, p.pants);
+      else if (p.bottoms === 'shorts') {
+        add(0.24, 0.36, 0.28, sx, 0.34, 0, p.pants);
+        add(0.24, 0.34, 0.28, sx, 0, 0, p.skin);
+      } else add(0.24, 0.7, 0.28, sx, 0, 0, p.skin);
+      add(0.26, 0.1, 0.36, sx, 0, 0.04, p.shoes);
+    }
+    if (p.bottoms === 'skirt') add(0.62, 0.34, 0.36, 0, 0.5, 0, p.pants);
+    // torso and arms
+    add(0.52, 0.7, 0.3, 0, 0.7, 0, p.shirt);
+    for (const sx of [-0.36, 0.36]) {
+      if (p.sleeves === 'long') add(0.2, 0.7, 0.26, sx, 0.7, 0, p.shirt);
+      else if (p.sleeves === 'short') {
+        add(0.2, 0.3, 0.26, sx, 1.1, 0, p.shirt);
+        add(0.2, 0.4, 0.26, sx, 0.7, 0, p.skin);
+      } else add(0.2, 0.7, 0.26, sx, 0.7, 0, p.skin);
+    }
+    // head with a face on the front
+    const face = new THREE.MeshLambertMaterial({ map: this.faceTexture(p.skin) });
+    face.userData.own = true; // not shared, so it can be freed with the figure
+    add(0.5, 0.5, 0.5, 0, 1.4, 0, p.skin, face);
+    // hair
+    if (p.hairStyle !== 'none') {
+      add(0.54, 0.12, 0.54, 0, 1.84, 0, p.hair);
+      add(0.54, p.hairStyle === 'long' ? 0.7 : 0.3, 0.08, 0, p.hairStyle === 'long' ? 1.2 : 1.6, -0.23, p.hair);
+      if (p.hairStyle === 'long') for (const sx of [-0.26, 0.26]) add(0.06, 0.55, 0.3, sx, 1.35, -0.08, p.hair);
+      else for (const sx of [-0.26, 0.26]) add(0.06, 0.22, 0.4, sx, 1.62, -0.03, p.hair);
+    }
+    // hats
+    if (p.hat === 'cap') {
+      add(0.58, 0.16, 0.58, 0, 1.86, 0, p.hatColor);
+      add(0.5, 0.04, 0.26, 0, 1.86, 0.36, p.hatColor);
+    } else if (p.hat === 'beanie') {
+      add(0.58, 0.26, 0.58, 0, 1.86, 0, p.hatColor);
+      add(0.14, 0.14, 0.14, 0, 2.12, 0, p.hatColor);
+    } else if (p.hat === 'tophat') {
+      add(0.84, 0.04, 0.84, 0, 1.88, 0, p.hatColor);
+      add(0.46, 0.42, 0.46, 0, 1.92, 0, p.hatColor);
+      add(0.48, 0.07, 0.48, 0, 1.97, 0, '#e5e7eb');
+    } else if (p.hat === 'crown') {
+      add(0.56, 0.14, 0.56, 0, 1.88, 0, p.hatColor);
+      for (const [sx, sz] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2], [0, 0]]) add(0.1, 0.14, 0.1, sx, 2.02, sz, p.hatColor);
+    }
+    g.scale.setScalar(0.9);
+    g.rotation.y = (p.rot * Math.PI) / 2;
+    const holder = new THREE.Group();
+    holder.add(g);
+    if (p.name) {
+      const tag = this.makeLabelSprite(p.name);
+      tag.scale.multiplyScalar(0.7);
+      tag.position.set(0, 2.25, 0);
+      holder.add(tag);
+    }
+    return holder;
+  }
+
+  // Free the textures a figure owns (shared colour materials are kept).
+  disposePerson(group) {
+    group.traverse((o) => {
+      if (o.isSprite) {
+        o.material.map?.dispose();
+        o.material.dispose();
+      } else if (o.material) {
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+          if (m.userData.own) {
+            m.map?.dispose();
+            m.dispose();
+          }
+        }
+      }
+    });
+  }
+
+  rebuildPeople() {
+    this.dirty = true;
+    const alive = new Set(this.world.people.map((p) => p.id));
+    for (const [id, entry] of this.personGroups) {
+      if (!alive.has(id)) {
+        this.scene.remove(entry.group);
+        this.disposePerson(entry.group);
+        this.personGroups.delete(id);
+      }
+    }
+    const off = this.offset;
+    for (const p of this.world.people) {
+      const sig = JSON.stringify({ ...p, x: 0, y: 0, z: 0 });
+      let entry = this.personGroups.get(p.id);
+      if (!entry || entry.sig !== sig) {
+        if (entry) {
+          this.scene.remove(entry.group);
+          this.disposePerson(entry.group);
+        }
+        entry = { sig, group: this.buildPerson(p) };
+        entry.group.userData.personId = p.id;
+        this.scene.add(entry.group);
+        this.personGroups.set(p.id, entry);
+      }
+      entry.group.position.set(p.x + 0.5 - off, p.y, p.z + 0.5 - off);
+    }
+  }
+
+  // Which way (0-3) a figure on this cell should face to look toward the camera.
+  facingRot(cell) {
+    const off = this.offset;
+    const dx = this.camera.position.x - (cell[0] + 0.5 - off);
+    const dz = this.camera.position.z - (cell[2] + 0.5 - off);
+    return (((Math.round(Math.atan2(dx, dz) / (Math.PI / 2))) % 4) + 4) % 4;
+  }
+
+  // id of the person under the pointer, or null
+  personAt(ray) {
+    const roots = [...this.personGroups.values()].map((e) => e.group);
+    const hits = ray.raycaster.intersectObjects(roots, true);
+    for (const h of hits) {
+      let o = h.object;
+      while (o && o.userData.personId === undefined) o = o.parent;
+      if (o) return o.userData.personId;
+    }
+    return null;
   }
 
   // ----- picking -----

@@ -24,7 +24,11 @@ When the site runs with its server (see below) three extra buttons appear:
 
 The live site is https://blockscape.onrender.com. If the files are ever served without the server (for example `python3 -m http.server`), these buttons stay hidden and everything else (building, pictures, share links, files) still works.
 
-### Admin (done in Neon, no in-app admin page)
+### Reviewing reports
+
+Admins get a **Reports** button (flag icon) in the toolbar with a count of reports waiting. For each report you can **Open** the diorama (view only), **Dismiss** the report, **Hide from gallery** (the owner keeps it, but it becomes private), or **Delete** it. A report about an *admin's* diorama is sent to a different admin; if there is no other admin it goes to a random other person, who then also gets the Reports button until they have dealt with it. Nobody ever reviews a report they wrote or one about their own diorama. Only admins see who made a report.
+
+### Admin tasks in Neon (the SQL way)
 
 Open the Neon SQL editor for the project:
 

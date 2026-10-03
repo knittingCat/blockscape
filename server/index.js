@@ -52,6 +52,21 @@ function buildCsp() {
   ].join('; ');
 }
 
+// SQL used to decide which open reports a person may review.
+//   - a report assigned to them (this is how reports about an admin's diorama reach someone else), or
+//   - for admins: unassigned reports about non-admin owners.
+// Nobody reviews a report they wrote or one about their own diorama.
+const REVIEWABLE = (me, isAdmin) => `
+  r.status = 'open' AND r.reporter_id <> ${me} AND o.id <> ${me}
+  AND (r.assigned_to = ${me} OR (${isAdmin ? 'TRUE' : 'FALSE'} AND r.assigned_to IS NULL AND o.is_admin = FALSE))`;
+
+async function countReports(user) {
+  const { rows } = await query(
+    `SELECT COUNT(*)::int AS n FROM ${T.reports} r JOIN ${T.dioramas} d ON d.id = r.diorama_id JOIN ${T.users} o ON o.id = d.owner_id WHERE ${REVIEWABLE(Number(user.id), !!user.is_admin)}`,
+  );
+  return rows[0].n;
+}
+
 export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
@@ -93,7 +108,10 @@ export function createApp() {
   }
 
   // --- accounts ---
-  app.get('/api/me', (req, res) => res.json({ user: publicUser(req.user) }));
+  app.get('/api/me', wrap(async (req, res) => {
+    if (!req.user) return res.json({ user: null });
+    res.json({ user: { ...publicUser(req.user), pendingReports: await countReports(req.user) } });
+  }));
 
   app.post('/api/signup', rateLimiter({ windowMs: 3600e3, max: 10 }), wrap(async (req, res) => {
     const username = String(req.body.username || '').trim();
@@ -201,7 +219,12 @@ export function createApp() {
     const d = rows[0];
     if (!d) return bad(res, 404, 'Diorama not found.');
     const mine = d.owner_id === req.user.id;
+    let reviewer = false;
     if (!mine && !req.user.is_admin) {
+      const r = await query(`SELECT 1 FROM ${T.reports} WHERE diorama_id = $1 AND assigned_to = $2 AND status = 'open'`, [id, req.user.id]);
+      reviewer = r.rowCount > 0;
+    }
+    if (!mine && !req.user.is_admin && !reviewer) {
       if (d.visibility !== 'gallery') return bad(res, 404, 'Diorama not found.');
       if (d.gallery_hash && !(await unlocked(req.user.id, 'gallery', d.owner_id))) return bad(res, 403, 'This gallery needs a code.', { locked: 'gallery', ownerId: d.owner_id, owner: d.username });
       if (d.code_hash && !(await unlocked(req.user.id, 'diorama', d.id))) return bad(res, 403, 'This diorama needs a code.', { locked: 'diorama', id: d.id, owner: d.username });
@@ -278,10 +301,69 @@ export function createApp() {
     const id = Number(req.body.dioramaId);
     const reason = String(req.body.reason || '').trim().slice(0, 300);
     if (!Number.isInteger(id) || !reason) return bad(res, 400, 'Tell us briefly what is wrong.');
-    const { rows } = await query(`SELECT owner_id FROM ${T.dioramas} WHERE id = $1 AND visibility = 'gallery'`, [id]);
+    const { rows } = await query(
+      `SELECT d.owner_id, u.is_admin AS owner_admin FROM ${T.dioramas} d JOIN ${T.users} u ON u.id = d.owner_id WHERE d.id = $1 AND d.visibility = 'gallery'`,
+      [id],
+    );
     if (!rows[0]) return bad(res, 404, 'Diorama not found.');
     if (rows[0].owner_id === req.user.id) return bad(res, 400, 'That is your own diorama.');
-    await query(`INSERT INTO ${T.reports} (diorama_id, reporter_id, reason) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [id, req.user.id, reason]);
+    // A report about an admin's diorama goes to a different admin; if there is none, to a random other person.
+    let assignedTo = null;
+    if (rows[0].owner_admin) {
+      const admin = await query(`SELECT id FROM ${T.users} WHERE is_admin = TRUE AND id <> $1 AND id <> $2 ORDER BY random() LIMIT 1`, [rows[0].owner_id, req.user.id]);
+      if (admin.rows[0]) assignedTo = admin.rows[0].id;
+      else {
+        const anyone = await query(`SELECT id FROM ${T.users} WHERE id <> $1 AND id <> $2 ORDER BY random() LIMIT 1`, [rows[0].owner_id, req.user.id]);
+        assignedTo = anyone.rows[0] ? anyone.rows[0].id : null;
+      }
+    }
+    await query(`INSERT INTO ${T.reports} (diorama_id, reporter_id, reason, assigned_to) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`, [id, req.user.id, reason, assignedTo]);
+    res.json({ ok: true });
+  }));
+
+  // --- reviewing reports ---
+  app.get('/api/reports', needUser, wrap(async (req, res) => {
+    const me = Number(req.user.id);
+    const { rows } = await query(
+      `SELECT r.id, r.reason, r.created_at, r.assigned_to, d.id AS diorama_id, d.title, d.visibility, o.username AS owner, p.username AS reporter
+       FROM ${T.reports} r JOIN ${T.dioramas} d ON d.id = r.diorama_id JOIN ${T.users} o ON o.id = d.owner_id JOIN ${T.users} p ON p.id = r.reporter_id
+       WHERE ${REVIEWABLE(me, !!req.user.is_admin)} ORDER BY r.created_at`,
+    );
+    res.json({
+      reports: rows.map((r) => ({
+        id: r.id,
+        reason: r.reason,
+        createdAt: r.created_at,
+        dioramaId: r.diorama_id,
+        title: r.title,
+        visibility: r.visibility,
+        owner: r.owner,
+        reporter: req.user.is_admin ? r.reporter : null, // only admins see who reported
+        pickedForYou: r.assigned_to === me,
+      })),
+    });
+  }));
+
+  app.post('/api/reports/:id/action', needUser, wrap(async (req, res) => {
+    const reportId = Number(req.params.id);
+    const action = req.body.action;
+    if (!Number.isInteger(reportId) || !['dismiss', 'hide', 'delete'].includes(action)) return bad(res, 400, 'Bad request.');
+    const me = Number(req.user.id);
+    const { rows } = await query(
+      `SELECT r.id, r.diorama_id FROM ${T.reports} r JOIN ${T.dioramas} d ON d.id = r.diorama_id JOIN ${T.users} o ON o.id = d.owner_id
+       WHERE r.id = $1 AND ${REVIEWABLE(me, !!req.user.is_admin)}`,
+      [reportId],
+    );
+    if (!rows[0]) return bad(res, 404, 'That report is not waiting for you.');
+    const dioramaId = rows[0].diorama_id;
+    if (action === 'delete') {
+      await query(`DELETE FROM ${T.dioramas} WHERE id = $1`, [dioramaId]); // its reports go with it
+    } else if (action === 'hide') {
+      await query(`UPDATE ${T.dioramas} SET visibility = 'private' WHERE id = $1`, [dioramaId]);
+      await query(`UPDATE ${T.reports} SET status = 'actioned', handled_by = $2, handled_at = NOW() WHERE diorama_id = $1 AND status = 'open'`, [dioramaId, me]);
+    } else {
+      await query(`UPDATE ${T.reports} SET status = 'dismissed', handled_by = $2, handled_at = NOW() WHERE id = $1`, [reportId, me]);
+    }
     res.json({ ok: true });
   }));
 

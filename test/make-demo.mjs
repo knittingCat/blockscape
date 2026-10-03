@@ -27,6 +27,10 @@ export function demoWorld() {
   box([24, 1, 20], [24, 1, 24], 24);
   box([5, 1, 24], [8, 1, 27], 7);
   box([5, 0, 24], [8, 0, 27], 7);
+  w.addPerson({ x: 11, y: 0, z: 19, rot: 0, name: 'Mia', shirt: '#ef4444', pants: '#1e3a8a', hair: '#7c4a1e', hairStyle: 'long', hat: 'none' });
+  w.addPerson({ x: 14, y: 0, z: 19, rot: 1, name: 'The King', skin: '#8d5524', shirt: '#8b5cf6', sleeves: 'long', hat: 'crown', hatColor: '#facc15', hairStyle: 'none' });
+  w.addPerson({ x: 17, y: 0, z: 19, rot: 0, skin: '#fde0c8', shirt: '#22c55e', bottoms: 'skirt', pants: '#f8fafc', hat: 'beanie', hatColor: '#06b6d4', hairStyle: 'short', hair: '#e5c07b' });
+  w.addPerson({ x: 21, y: 0, z: 16, rot: 3, shirt: '#111827', bottoms: 'shorts', pants: '#475569', hat: 'tophat', hatColor: '#111827', sleeves: 'none' });
   w.addLabel(11, 8, 13, 'Chapter 3: The Little House');
   w.addLabel(24, 1, 9, 'The pond');
   w.meta.title = 'Chapter 3: The Little House';

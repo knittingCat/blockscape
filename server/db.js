@@ -70,6 +70,14 @@ export async function initDb() {
     );
   `);
 
+  // Report review: who is asked to look at it, and what happened to it.
+  await query(`
+    ALTER TABLE ${T.reports} ADD COLUMN IF NOT EXISTS assigned_to INTEGER REFERENCES ${T.users}(id) ON DELETE SET NULL;
+    ALTER TABLE ${T.reports} ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open';
+    ALTER TABLE ${T.reports} ADD COLUMN IF NOT EXISTS handled_by INTEGER REFERENCES ${T.users}(id) ON DELETE SET NULL;
+    ALTER TABLE ${T.reports} ADD COLUMN IF NOT EXISTS handled_at TIMESTAMPTZ;
+  `);
+
   // Case-insensitive uniqueness ("Ann" and "ann" are the same person). Not fatal if old data already clashes.
   try {
     await query(`CREATE UNIQUE INDEX IF NOT EXISTS ${t('users_username_lower')} ON ${T.users} (LOWER(username))`);
