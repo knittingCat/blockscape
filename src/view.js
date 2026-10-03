@@ -411,13 +411,15 @@ export class DioramaView {
   // A blocky figure standing on the floor of its cell. Total height is about 1.7 cells.
   buildPerson(p) {
     const g = new THREE.Group();
+    let part = g; // where new pieces go (the head pivot once we reach the head)
+    let lower = 0; // height of that pivot
     const add = (w, h, d, x, y, z, hex, face) => {
       const m = new THREE.Mesh(this.geometry, face ? [this.mat(hex), this.mat(hex), this.mat(hex), this.mat(hex), face, this.mat(hex)] : this.mat(hex));
       m.scale.set(w, h, d);
-      m.position.set(x, y + h / 2, z);
+      m.position.set(x, y - lower + h / 2, z);
       m.castShadow = true;
       m.receiveShadow = true;
-      g.add(m);
+      part.add(m);
       return m;
     };
     // legs and shoes
@@ -439,6 +441,15 @@ export class DioramaView {
         add(0.2, 0.4, 0.26, sx, 0.7, 0, p.skin);
       } else add(0.2, 0.7, 0.26, sx, 0.7, 0, p.skin);
     }
+    // everything from here up turns and tilts together, around the neck
+    const head = new THREE.Group();
+    head.position.set(0, 1.4, 0);
+    head.rotation.order = 'YXZ';
+    head.rotation.y = (p.headTurn * Math.PI) / 6;
+    head.rotation.x = -p.headTilt * 0.35;
+    g.add(head);
+    part = head;
+    lower = 1.4;
     // head with a face on the front
     const face = new THREE.MeshLambertMaterial({ map: this.faceTexture(p.skin) });
     face.userData.own = true; // not shared, so it can be freed with the figure
@@ -468,10 +479,12 @@ export class DioramaView {
     g.scale.setScalar(0.9);
     g.rotation.order = 'YXZ'; // lie down first, then turn around the vertical
     g.rotation.y = (p.rot * Math.PI) / 2;
-    const lying = p.pose === 'lying';
+    const lying = p.pose !== 'standing';
     if (lying) {
-      g.rotation.x = -Math.PI / 2; // on their back, head toward the back of the cell
-      g.position.y = 0.25; // raise so their back rests on the floor
+      // on their back (face up) or on their front (face down); head toward the back of the cell
+      g.rotation.x = p.pose === 'lyingFront' ? Math.PI / 2 : -Math.PI / 2;
+      g.position.y = 0.25; // raise so they rest on the floor
+      if (p.pose === 'lyingFront') g.rotation.y += Math.PI; // keep the head at the same end
     }
     const holder = new THREE.Group();
     holder.add(g);
@@ -547,11 +560,11 @@ export class DioramaView {
     if (!entry || this.looking) return false;
     const off = this.offset;
     const a = (p.rot * Math.PI) / 2; // the figure faces (sin a, 0, cos a)
-    const lying = p.pose === 'lying';
+    const lying = p.pose !== 'standing';
     const at = new THREE.Vector3(p.x + 0.5 - off, p.y + (lying ? 0.55 : 1.4), p.z + 0.5 - off);
     if (lying) at.add(new THREE.Vector3(-1.1 * Math.sin(a), 0, -1.1 * Math.cos(a))); // head end
     this.saved = { pos: this.camera.position.clone(), target: this.controls.target.clone(), fov: this.camera.fov };
-    this.looking = { id: p.id, yaw: a + Math.PI, pitch: lying ? 0.9 : 0, group: entry.group };
+    this.looking = { id: p.id, lying, yaw: a + (lying ? 0 : (p.headTurn * Math.PI) / 6) + Math.PI, pitch: lying ? -1.1 : -p.headTilt * 0.35, group: entry.group };
     entry.group.visible = false; // do not look at the inside of their own head
     this.controls.enabled = false;
     this.camera.fov = 70;
@@ -616,8 +629,12 @@ export class DioramaView {
     this.controls.enabled = true;
     this.controls.update();
     this.dirty = true;
-    const rot = ((Math.round((L.yaw - Math.PI) / (Math.PI / 2)) % 4) + 4) % 4;
-    return { id: L.id, rot };
+    const turn = L.yaw - Math.PI; // the way they now look, as an angle
+    const rot = ((Math.round(turn / (Math.PI / 2)) % 4) + 4) % 4;
+    if (L.lying) return { id: L.id, rot }; // lying down: only the body direction follows the view
+    // whatever is left over (up to 45 degrees) turns the head, and looking up/down tilts it
+    const rest = turn - Math.round(turn / (Math.PI / 2)) * (Math.PI / 2);
+    return { id: L.id, rot, headTurn: Math.round(rest / (Math.PI / 6)), headTilt: -Math.round(L.pitch / 0.35) };
   }
 
   // id of the person under the pointer, or null

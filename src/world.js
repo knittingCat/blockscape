@@ -5,7 +5,7 @@ export const HEIGHT = 32;
 
 // ---- people (decorative figures with a customizable outfit; not part of the block grid) ----
 export const PERSON_CHOICES = {
-  pose: ['standing', 'lying'],
+  pose: ['standing', 'lying', 'lyingFront'], // lying = on their back, lyingFront = on their front
   hairStyle: ['none', 'short', 'long'],
   sleeves: ['short', 'long', 'none'],
   bottoms: ['pants', 'shorts', 'skirt'],
@@ -14,6 +14,8 @@ export const PERSON_CHOICES = {
 export const PERSON_DEFAULTS = {
   rot: 0,
   pose: 'standing',
+  headTurn: 0, // head turned left/right in 30 degree steps (-3..3)
+  headTilt: 0, // head tilted up (+) or down (-) in 20 degree steps (-2..2)
   skin: '#f1c27d',
   hair: '#3b2a1a',
   hairStyle: 'short',
@@ -33,6 +35,8 @@ export function cleanPerson(p) {
   const out = { ...PERSON_DEFAULTS };
   for (const key of ['skin', 'hair', 'shirt', 'pants', 'shoes', 'hatColor']) if (COLOR_RE.test(p[key])) out[key] = p[key].toLowerCase();
   for (const key of Object.keys(PERSON_CHOICES)) if (PERSON_CHOICES[key].includes(p[key])) out[key] = p[key];
+  out.headTurn = Math.max(-3, Math.min(3, Math.round(Number(p.headTurn)) || 0));
+  out.headTilt = Math.max(-2, Math.min(2, Math.round(Number(p.headTilt)) || 0));
   out.rot = Number.isInteger(p.rot) ? ((p.rot % 4) + 4) % 4 : 0;
   out.name = typeof p.name === 'string' ? p.name.slice(0, 30) : '';
   out.x = Number(p.x);

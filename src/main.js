@@ -280,7 +280,7 @@ const SHIRTS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6'
 const PANTS = ['#1f2937', '#374151', '#1e3a8a', '#7c2d12', '#3f6212', '#581c87', '#475569'];
 const HAIRS = ['#1c1917', '#3b2a1a', '#7c4a1e', '#c27a2c', '#e5c07b', '#b91c1c', '#9ca3af'];
 const CHOICE_LABELS = {
-  standing: 'Standing', lying: 'Lying down', none: 'None', short: 'Short', long: 'Long', pants: 'Pants', shorts: 'Shorts', skirt: 'Skirt',
+  standing: 'Standing', lying: 'Lying on back', lyingFront: 'Lying on front', none: 'None', short: 'Short', long: 'Long', pants: 'Pants', shorts: 'Shorts', skirt: 'Skirt',
   cap: 'Cap', beanie: 'Beanie', tophat: 'Top hat', crown: 'Crown',
 };
 const CHOICE_TITLES = { hairStyle: 'Hair', sleeves: 'Sleeves', bottoms: 'Bottoms', hat: 'Hat' };
@@ -324,6 +324,10 @@ function openPersonDialog(id) {
       ${select('bottoms', 'Bottoms')}${color('pants', 'Bottoms color')}
     </div>
     ${color('shoes', 'Shoes')}
+    <div class="grid2">
+      <label>Head turn<input type="range" min="-3" max="3" step="1" data-prop="headTurn"></label>
+      <label>Head up / down<input type="range" min="-2" max="2" step="1" data-prop="headTilt"></label>
+    </div>
     <label>Name (floats above their head)<input type="text" data-prop="name" maxlength="30" autocomplete="off" placeholder="optional"></label>
     <div class="btnrow">
       <button type="button" data-act="left">Turn left</button>
@@ -454,9 +458,10 @@ function stopLooking() {
   $('#lookBar').hidden = true;
   if (!r) return;
   const person = world.getPerson(r.id);
-  if (person && person.rot !== r.rot) {
+  const next = { rot: r.rot, headTurn: r.headTurn ?? person?.headTurn, headTilt: r.headTilt ?? person?.headTilt };
+  if (person && Object.keys(next).some((k) => person[k] !== next[k])) {
     const before = { ...person };
-    world.updatePerson(r.id, { rot: r.rot });
+    world.updatePerson(r.id, next);
     world.recordPersonEdit(r.id, before);
   }
   refreshHover();
