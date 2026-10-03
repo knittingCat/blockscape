@@ -330,6 +330,7 @@ function openPersonDialog(id) {
       <button type="button" data-act="right">Turn right</button>
       <button type="button" data-act="random">Surprise me</button>
       <button type="button" data-act="move">Move</button>
+      <button type="button" data-act="look">Look through their eyes</button>
     </div>
     <div class="btnrow">
       <button type="button" data-act="delete">Remove person</button>
@@ -362,6 +363,10 @@ function openPersonDialog(id) {
     dlg.close('move');
     toast('Click where this person should stand (right-click to cancel).', 5000);
   };
+  body.querySelector('[data-act=look]').onclick = () => {
+    dlg.close('look');
+    startLooking(id);
+  };
   body.querySelector('[data-act=delete]').onclick = () => {
     world.removePerson(id);
     dlg.close('removed');
@@ -393,7 +398,7 @@ function otherCells(cell) {
 
 function refreshHover(e) {
   if (e) hoverInfo = e;
-  if (!hoverInfo || !view || isViewOnly()) return;
+  if (!hoverInfo || !view || isViewOnly() || view.looking) return;
   const { hit } = currentHit(hoverInfo);
   const erasing = tool === 'erase' || hoverInfo.shiftKey;
   const block = BLOCK_BY_ID.get(selected);
@@ -438,8 +443,27 @@ function refreshHover(e) {
 
 let movingPerson = null; // id of a person waiting to be moved to the next clicked spot
 
+function startLooking(id) {
+  const person = world.getPerson(id);
+  if (!person || !view.enterPerson(person)) return;
+  $('#lookBar').hidden = false;
+}
+
+function stopLooking() {
+  const r = view.exitPerson();
+  $('#lookBar').hidden = true;
+  if (!r) return;
+  const person = world.getPerson(r.id);
+  if (person && person.rot !== r.rot) {
+    const before = { ...person };
+    world.updatePerson(r.id, { rot: r.rot });
+    world.recordPersonEdit(r.id, before);
+  }
+  refreshHover();
+}
+
 async function actAt(e, button) {
-  if (isViewOnly()) return;
+  if (isViewOnly() || view.looking) return;
   const { ray, hit } = currentHit(e);
   if (movingPerson != null) {
     const id = movingPerson;
@@ -871,7 +895,12 @@ function wireUI() {
     await loadStart(false);
   });
 
+  $('#lookDone').onclick = stopLooking;
   window.addEventListener('keydown', (e) => {
+    if (view.looking) {
+      if (e.key === 'Escape' || e.key === 'Enter') stopLooking();
+      return;
+    }
     if (isViewOnly()) return;
     if (e.target.closest?.('input, textarea, select') || document.querySelector('dialog[open]')) return;
     const mod = e.metaKey || e.ctrlKey;

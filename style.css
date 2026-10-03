@@ -121,3 +121,6 @@ body.viewonly #stage canvas { cursor: grab; }
 .rrow .reason { margin: .3rem 0; font-style: italic; }
 .rrow .dactions { margin-top: .5rem; flex-wrap: wrap; }
 .rrow .dactions button { flex: 0 1 auto; padding: .3rem .7rem; }
+
+#lookBar { position: absolute; left: 50%; bottom: 5.8rem; transform: translateX(-50%); display: flex; align-items: center; gap: .6rem; background: rgba(18,21,31,.92); border: 1px solid #60a5fa; border-radius: 12px; padding: .4rem .7rem; z-index: 6; font-size: .9rem; max-width: 94vw; flex-wrap: wrap; justify-content: center; }
+#lookBar[hidden] { display: none; }

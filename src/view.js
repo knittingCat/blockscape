@@ -540,6 +540,86 @@ export class DioramaView {
     return (((Math.round(Math.atan2(dx, dz) / (Math.PI / 2))) % 4) + 4) % 4;
   }
 
+  // ----- looking through a person's eyes -----
+  // Drag (or arrow keys) to look around; the person ends up facing the way you were looking.
+  enterPerson(p) {
+    const entry = this.personGroups.get(p.id);
+    if (!entry || this.looking) return false;
+    const off = this.offset;
+    const a = (p.rot * Math.PI) / 2; // the figure faces (sin a, 0, cos a)
+    const lying = p.pose === 'lying';
+    const at = new THREE.Vector3(p.x + 0.5 - off, p.y + (lying ? 0.55 : 1.4), p.z + 0.5 - off);
+    if (lying) at.add(new THREE.Vector3(-1.1 * Math.sin(a), 0, -1.1 * Math.cos(a))); // head end
+    this.saved = { pos: this.camera.position.clone(), target: this.controls.target.clone(), fov: this.camera.fov };
+    this.looking = { id: p.id, yaw: a + Math.PI, pitch: lying ? 0.9 : 0, group: entry.group };
+    entry.group.visible = false; // do not look at the inside of their own head
+    this.controls.enabled = false;
+    this.camera.fov = 70;
+    this.camera.updateProjectionMatrix();
+    this.camera.rotation.order = 'YXZ';
+    this.camera.position.copy(at);
+    this.applyLook();
+    const L = this.looking;
+    L.down = (e) => {
+      L.drag = { x: e.clientX, y: e.clientY };
+      this.canvas.setPointerCapture?.(e.pointerId);
+    };
+    L.move = (e) => {
+      if (!L.drag) return;
+      L.yaw += (e.clientX - L.drag.x) * 0.006;
+      L.pitch += (e.clientY - L.drag.y) * 0.006;
+      L.drag = { x: e.clientX, y: e.clientY };
+      this.applyLook();
+    };
+    L.up = () => (L.drag = null);
+    L.key = (e) => {
+      const step = 0.12;
+      if (e.key === 'ArrowLeft') L.yaw += step;
+      else if (e.key === 'ArrowRight') L.yaw -= step;
+      else if (e.key === 'ArrowUp') L.pitch -= step;
+      else if (e.key === 'ArrowDown') L.pitch += step;
+      else return;
+      e.preventDefault();
+      this.applyLook();
+    };
+    this.canvas.addEventListener('pointerdown', L.down);
+    this.canvas.addEventListener('pointermove', L.move);
+    this.canvas.addEventListener('pointerup', L.up);
+    this.canvas.addEventListener('pointercancel', L.up);
+    window.addEventListener('keydown', L.key);
+    return true;
+  }
+
+  applyLook() {
+    const L = this.looking;
+    L.pitch = Math.max(-1.4, Math.min(1.4, L.pitch));
+    this.camera.rotation.set(-L.pitch, L.yaw, 0);
+    this.dirty = true;
+  }
+
+  // Leave the person's eyes; returns { id, rot } with the way they were looking (0-3).
+  exitPerson() {
+    const L = this.looking;
+    if (!L) return null;
+    this.canvas.removeEventListener('pointerdown', L.down);
+    this.canvas.removeEventListener('pointermove', L.move);
+    this.canvas.removeEventListener('pointerup', L.up);
+    this.canvas.removeEventListener('pointercancel', L.up);
+    window.removeEventListener('keydown', L.key);
+    L.group.visible = true;
+    this.looking = null;
+    this.camera.rotation.order = 'XYZ';
+    this.camera.fov = this.saved.fov;
+    this.camera.updateProjectionMatrix();
+    this.camera.position.copy(this.saved.pos);
+    this.controls.target.copy(this.saved.target);
+    this.controls.enabled = true;
+    this.controls.update();
+    this.dirty = true;
+    const rot = ((Math.round((L.yaw - Math.PI) / (Math.PI / 2)) % 4) + 4) % 4;
+    return { id: L.id, rot };
+  }
+
   // id of the person under the pointer, or null
   personAt(ray) {
     const roots = [...this.personGroups.values()].map((e) => e.group);
@@ -729,7 +809,7 @@ export class DioramaView {
     t.x = Math.max(-lim, Math.min(lim, t.x));
     t.z = Math.max(-lim, Math.min(lim, t.z));
     t.y = Math.max(0, Math.min(this.world.height, t.y));
-    const moved = this.controls.update();
+    const moved = this.looking ? false : this.controls.update(); // the camera is driven by the person view while looking
     if (moved || this.dirty) {
       this.dirty = false;
       this.renderer.render(this.scene, this.camera);
