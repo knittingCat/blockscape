@@ -5,6 +5,7 @@ export const HEIGHT = 32;
 
 // ---- people (decorative figures with a customizable outfit; not part of the block grid) ----
 export const PERSON_CHOICES = {
+  pose: ['standing', 'lying'],
   hairStyle: ['none', 'short', 'long'],
   sleeves: ['short', 'long', 'none'],
   bottoms: ['pants', 'shorts', 'skirt'],
@@ -12,6 +13,7 @@ export const PERSON_CHOICES = {
 };
 export const PERSON_DEFAULTS = {
   rot: 0,
+  pose: 'standing',
   skin: '#f1c27d',
   hair: '#3b2a1a',
   hairStyle: 'short',

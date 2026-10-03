@@ -280,7 +280,7 @@ const SHIRTS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6'
 const PANTS = ['#1f2937', '#374151', '#1e3a8a', '#7c2d12', '#3f6212', '#581c87', '#475569'];
 const HAIRS = ['#1c1917', '#3b2a1a', '#7c4a1e', '#c27a2c', '#e5c07b', '#b91c1c', '#9ca3af'];
 const CHOICE_LABELS = {
-  none: 'None', short: 'Short', long: 'Long', pants: 'Pants', shorts: 'Shorts', skirt: 'Skirt',
+  standing: 'Standing', lying: 'Lying down', none: 'None', short: 'Short', long: 'Long', pants: 'Pants', shorts: 'Shorts', skirt: 'Skirt',
   cap: 'Cap', beanie: 'Beanie', tophat: 'Top hat', crown: 'Crown',
 };
 const CHOICE_TITLES = { hairStyle: 'Hair', sleeves: 'Sleeves', bottoms: 'Bottoms', hat: 'Hat' };
@@ -317,6 +317,7 @@ function openPersonDialog(id) {
     <div class="hint">Skin</div>
     <div class="swatches">${SKINS.map((c) => `<button type="button" class="skin" data-skin="${c}" style="background:${c}" aria-label="Skin ${c}"></button>`).join('')}</div>
     <div class="grid2">
+      ${select('pose', 'Pose')}<span></span>
       ${select('hairStyle', 'Hair')}${color('hair', 'Hair color')}
       ${select('hat', 'Hat')}${color('hatColor', 'Hat color')}
       ${select('sleeves', 'Top')}${color('shirt', 'Top color')}
@@ -328,6 +329,7 @@ function openPersonDialog(id) {
       <button type="button" data-act="left">Turn left</button>
       <button type="button" data-act="right">Turn right</button>
       <button type="button" data-act="random">Surprise me</button>
+      <button type="button" data-act="move">Move</button>
     </div>
     <div class="btnrow">
       <button type="button" data-act="delete">Remove person</button>
@@ -354,6 +356,11 @@ function openPersonDialog(id) {
   body.querySelector('[data-act=random]').onclick = () => {
     world.updatePerson(id, randomOutfit());
     sync();
+  };
+  body.querySelector('[data-act=move]').onclick = () => {
+    movingPerson = id;
+    dlg.close('move');
+    toast('Click where this person should stand (right-click to cancel).', 5000);
   };
   body.querySelector('[data-act=delete]').onclick = () => {
     world.removePerson(id);
@@ -429,9 +436,24 @@ function refreshHover(e) {
   }
 }
 
+let movingPerson = null; // id of a person waiting to be moved to the next clicked spot
+
 async function actAt(e, button) {
   if (isViewOnly()) return;
   const { ray, hit } = currentHit(e);
+  if (movingPerson != null) {
+    const id = movingPerson;
+    const person = world.getPerson(id);
+    if (e.button === 2 || !person) movingPerson = null;
+    else if (hit && hit.prev) {
+      movingPerson = null;
+      const before = { ...person };
+      world.updatePerson(id, { x: hit.prev[0], y: hit.prev[1], z: hit.prev[2] });
+      world.recordPersonEdit(id, before);
+      toast('Moved.');
+    }
+    return;
+  }
   const erasing = tool === 'erase' || button === 2 || e.shiftKey;
   const personId = view.personAt(ray);
   if (personId != null && !['box', 'select', 'paste'].includes(tool)) {

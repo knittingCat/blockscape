@@ -164,6 +164,19 @@ await test('people: add, customize, remove, with undo and redo', () => {
   assert.equal(w.getPerson(p.id).name, 'King');
 });
 
+await test('people: can lie down; bad poses fall back to standing', () => {
+  const w = new World(8);
+  const a = w.addPerson({ x: 1, y: 0, z: 1, pose: 'lying' });
+  assert.equal(a.pose, 'lying');
+  assert.equal(w.addPerson({ x: 2, y: 0, z: 2 }).pose, 'standing');
+  assert.equal(w.addPerson({ x: 3, y: 0, z: 3, pose: 'flying' }).pose, 'standing');
+  const before = { ...w.getPerson(a.id) };
+  w.updatePerson(a.id, { pose: 'standing' });
+  w.recordPersonEdit(a.id, before);
+  w.undo();
+  assert.equal(w.getPerson(a.id).pose, 'lying');
+});
+
 await test('people: invalid values are cleaned, and they survive saving', async () => {
   const c = cleanPerson({ x: 1, y: 0, z: 1, shirt: 'red', hat: 'sombrero', skin: '#ABCDEF', name: 'x'.repeat(100), rot: -1 });
   assert.equal(c.shirt, PERSON_DEFAULTS.shirt);

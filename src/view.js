@@ -466,13 +466,22 @@ export class DioramaView {
       for (const [sx, sz] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2], [0, 0]]) add(0.1, 0.14, 0.1, sx, 2.02, sz, p.hatColor);
     }
     g.scale.setScalar(0.9);
+    g.rotation.order = 'YXZ'; // lie down first, then turn around the vertical
     g.rotation.y = (p.rot * Math.PI) / 2;
+    const lying = p.pose === 'lying';
+    if (lying) {
+      g.rotation.x = -Math.PI / 2; // on their back, head toward the back of the cell
+      g.position.y = 0.25; // raise so their back rests on the floor
+    }
     const holder = new THREE.Group();
     holder.add(g);
     if (p.name) {
       const tag = this.makeLabelSprite(p.name);
       tag.scale.multiplyScalar(0.7);
-      tag.position.set(0, 2.25, 0);
+      if (lying) {
+        const a = (p.rot * Math.PI) / 2; // head is at -z of the figure, turned by rot
+        tag.position.set(-1.3 * Math.sin(a), 0.9, -1.3 * Math.cos(a));
+      } else tag.position.set(0, 2.25, 0);
       holder.add(tag);
     }
     return holder;
