@@ -14,7 +14,8 @@ export const PERSON_CHOICES = {
 export const PERSON_DEFAULTS = {
   rot: 0,
   pose: 'standing',
-  headTurn: 0, // head turned left/right in 30 degree steps (-3..3)
+  twist: 0, // whole person turned further, in 30 degree steps on top of rot (0..11)
+  headTurn: 0, // head turned left/right in 30 degree steps (-6..6, a full turn)
   headTilt: 0, // head tilted up (+) or down (-) in 20 degree steps (-2..2)
   skin: '#f1c27d',
   hair: '#3b2a1a',
@@ -35,7 +36,8 @@ export function cleanPerson(p) {
   const out = { ...PERSON_DEFAULTS };
   for (const key of ['skin', 'hair', 'shirt', 'pants', 'shoes', 'hatColor']) if (COLOR_RE.test(p[key])) out[key] = p[key].toLowerCase();
   for (const key of Object.keys(PERSON_CHOICES)) if (PERSON_CHOICES[key].includes(p[key])) out[key] = p[key];
-  out.headTurn = Math.max(-3, Math.min(3, Math.round(Number(p.headTurn)) || 0));
+  out.headTurn = Math.max(-6, Math.min(6, Math.round(Number(p.headTurn)) || 0));
+  out.twist = ((Math.round(Number(p.twist)) || 0) % 12 + 12) % 12;
   out.headTilt = Math.max(-2, Math.min(2, Math.round(Number(p.headTilt)) || 0));
   out.rot = Number.isInteger(p.rot) ? ((p.rot % 4) + 4) % 4 : 0;
   out.name = typeof p.name === 'string' ? p.name.slice(0, 30) : '';
@@ -202,6 +204,59 @@ export class World {
     }
     this.emit({ type: 'labels' });
     return true;
+  }
+
+  // ----- flowing water and lava -----
+  // Water and lava blocks are sources. Like in Minecraft they fall down through empty cells and, once they
+  // rest on something, spread sideways (water 7 cells, lava 3), getting shallower with distance.
+  // Flow is worked out from the sources each time (nothing extra is saved). Where water and lava flows
+  // meet, the cell turns to cobblestone. Returns [{ x, y, z, id, r, fall, step }] (r = reach left, step = how
+  // many steps from the source, used to animate the spreading).
+  computeFlow(cap = 30000) {
+    const result = new Map(); // fluid id -> Map(index -> cell)
+    for (const [fid, R] of [[9, 7], [10, 3]]) {
+      const best = new Map();
+      let layer = [];
+      for (let i = 0; i < this.cells.length; i++) if (this.cells[i] === fid) layer.push({ i, r: R, step: 0 });
+      const improve = (next, x, y, z, r, fall, step) => {
+        const i = this.index(x, y, z);
+        const cur = best.get(i);
+        if (cur && (r < cur.r || (r === cur.r && (!fall || cur.fall)))) return;
+        best.set(i, { x, y, z, r, fall, step: cur ? Math.min(cur.step, step) : step });
+        next.push({ i, r, step });
+      };
+      while (layer.length && best.size < cap) {
+        const next = [];
+        for (const c of layer) {
+          const [x, y, z] = this.coords(c.i);
+          if (y > 0 && this.get(x, y - 1, z) === 0) {
+            improve(next, x, y - 1, z, R, true, c.step + 1);
+            continue;
+          }
+          if (c.r < 1) continue;
+          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = x + dx;
+            const nz = z + dz;
+            if (this.inBounds(nx, y, nz) && this.get(nx, y, nz) === 0) improve(next, nx, y, nz, c.r - 1, false, c.step + 1);
+          }
+        }
+        layer = next;
+      }
+      for (const cell of best.values()) {
+        const above = this.get(cell.x, cell.y + 1, cell.z);
+        if (above === fid || best.has(this.index(cell.x, cell.y + 1, cell.z))) cell.fall = true;
+      }
+      result.set(fid, best);
+    }
+    const out = [];
+    const water = result.get(9);
+    const lava = result.get(10);
+    for (const [i, c] of water) {
+      if (lava.has(i)) out.push({ x: c.x, y: c.y, z: c.z, id: 4, r: 0, fall: true, step: Math.max(c.step, lava.get(i).step) });
+      else out.push({ ...c, id: 9 });
+    }
+    for (const [i, c] of lava) if (!water.has(i)) out.push({ ...c, id: 10 });
+    return out;
   }
 
   // ----- people -----

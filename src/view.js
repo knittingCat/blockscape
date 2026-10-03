@@ -18,6 +18,7 @@ export class DioramaView {
     this.personGroups = new Map(); // person id -> { sig, group }
     this.personMats = new Map(); // colour -> material (shared)
     this.textures = new Map();
+    this.flowMeshes = new Map();
     this.materials = new Map();
     this.geometry = new THREE.BoxGeometry(1, 1, 1);
 
@@ -287,6 +288,88 @@ export class DioramaView {
     }
     this.applyGlow();
     this.dirty = true;
+    this.scheduleFlow();
+  }
+
+  // ----- flowing water and lava (worked out from the source blocks; see World.computeFlow) -----
+  scheduleFlow() {
+    if (this.flowPending) return;
+    this.flowPending = true;
+    requestAnimationFrame(() => {
+      this.flowPending = false;
+      this.rebuildFlow();
+    });
+  }
+
+  rebuildFlow() {
+    const cells = this.world.computeFlow();
+    const known = this.flowKnown || new Set();
+    const key = (c) => `${c.id}:${c.x},${c.y},${c.z}`;
+    // cells that are already showing appear at once; new ones spread out step by step
+    const fresh = cells.filter((c) => !known.has(key(c)));
+    const firstStep = fresh.length ? Math.min(...fresh.map((c) => c.step)) : 0;
+    for (const c of cells) c.t = known.has(key(c)) ? 0 : (c.step - firstStep + 1) * 0.14;
+    this.flowKnown = new Set(cells.map(key));
+    const byId = new Map();
+    for (const c of cells) {
+      if (!byId.has(c.id)) byId.set(c.id, []);
+      byId.get(c.id).push(c);
+    }
+    const m = new THREE.Matrix4();
+    const off = this.offset;
+    for (const [id, list] of byId) list.sort((a, b) => a.t - b.t);
+    for (const id of new Set([...this.flowMeshes.keys(), ...byId.keys()])) {
+      const list = byId.get(id) || [];
+      let entry = this.flowMeshes.get(id);
+      if (!entry || entry.capacity < list.length) {
+        if (entry) {
+          this.scene.remove(entry.mesh);
+          entry.mesh.dispose();
+        }
+        const capacity = Math.max(256, 2 ** Math.ceil(Math.log2(Math.max(list.length, 1))));
+        const block = BLOCK_BY_ID.get(id);
+        const mesh = new THREE.InstancedMesh(this.geometry, this.blockMaterials(block), capacity);
+        mesh.frustumCulled = false;
+        mesh.castShadow = !block.alpha;
+        mesh.receiveShadow = true;
+        mesh.renderOrder = block.alpha ? 2 : 0;
+        mesh.count = 0;
+        this.scene.add(mesh);
+        entry = { mesh, capacity };
+        this.flowMeshes.set(id, entry);
+      }
+      entry.times = list.map((c) => c.t);
+      list.forEach((c, k) => {
+        const R = c.id === 10 ? 3 : 7;
+        const h = c.id === 4 || c.fall ? 1 : 0.14 + (0.74 * (c.r + 1)) / (R + 1); // shallower further from the source
+        m.makeScale(1, h, 1);
+        m.setPosition(c.x + 0.5 - off, c.y + h / 2, c.z + 0.5 - off);
+        entry.mesh.setMatrixAt(k, m);
+      });
+      entry.mesh.instanceMatrix.needsUpdate = true;
+    }
+    this.flowStart = performance.now();
+    this.updateFlowReveal();
+    this.applyGlow();
+  }
+
+  // Show the flow cells whose turn has come (they appear a little at a time, like spreading liquid).
+  updateFlowReveal(all = false) {
+    const t = (performance.now() - (this.flowStart || 0)) / 1000;
+    let waiting = false;
+    for (const { mesh, times } of this.flowMeshes.values()) {
+      let n = times.length;
+      if (!all) {
+        n = 0;
+        while (n < times.length && times[n] <= t) n++;
+      }
+      if (n < times.length) waiting = true;
+      if (mesh.count !== n) {
+        mesh.count = n;
+        this.dirty = true;
+      }
+    }
+    this.flowWaiting = waiting;
   }
 
   // Replace the world (new/open): stage and meshes are resized to match.
@@ -296,6 +379,12 @@ export class DioramaView {
       mesh.dispose();
     }
     this.typeMeshes.clear();
+    for (const { mesh } of this.flowMeshes.values()) {
+      this.scene.remove(mesh);
+      mesh.dispose();
+    }
+    this.flowMeshes.clear();
+    this.flowKnown = null;
     for (const s of this.labelSprites.values()) this.scene.remove(s);
     this.labelSprites.clear();
     for (const { group } of this.personGroups.values()) {
@@ -478,7 +567,7 @@ export class DioramaView {
     }
     g.scale.setScalar(0.9);
     g.rotation.order = 'YXZ'; // lie down first, then turn around the vertical
-    g.rotation.y = (p.rot * Math.PI) / 2;
+    g.rotation.y = ((p.rot * 3 + p.twist) * Math.PI) / 6; // rot is quarter turns, twist is 30 degree steps
     const lying = p.pose !== 'standing';
     if (lying) {
       // on their back (face up) or on their front (face down); head toward the back of the cell
@@ -492,7 +581,7 @@ export class DioramaView {
       const tag = this.makeLabelSprite(p.name);
       tag.scale.multiplyScalar(0.7);
       if (lying) {
-        const a = (p.rot * Math.PI) / 2; // head is at -z of the figure, turned by rot
+        const a = ((p.rot * 3 + p.twist) * Math.PI) / 6; // head is at -z of the figure, turned by rot
         tag.position.set(-1.3 * Math.sin(a), 0.9, -1.3 * Math.cos(a));
       } else tag.position.set(0, 2.25, 0);
       holder.add(tag);
@@ -559,7 +648,7 @@ export class DioramaView {
     const entry = this.personGroups.get(p.id);
     if (!entry || this.looking) return false;
     const off = this.offset;
-    const a = (p.rot * Math.PI) / 2; // the figure faces (sin a, 0, cos a)
+    const a = ((p.rot * 3 + p.twist) * Math.PI) / 6; // the figure faces (sin a, 0, cos a)
     const lying = p.pose !== 'standing';
     const at = new THREE.Vector3(p.x + 0.5 - off, p.y + (lying ? 0.55 : 1.4), p.z + 0.5 - off);
     if (lying) at.add(new THREE.Vector3(-1.1 * Math.sin(a), 0, -1.1 * Math.cos(a))); // head end
@@ -631,10 +720,10 @@ export class DioramaView {
     this.dirty = true;
     const turn = L.yaw - Math.PI; // the way they now look, as an angle
     const rot = ((Math.round(turn / (Math.PI / 2)) % 4) + 4) % 4;
-    if (L.lying) return { id: L.id, rot }; // lying down: only the body direction follows the view
+    if (L.lying) return { id: L.id, rot, twist: 0 }; // lying down: only the body direction follows the view
     // whatever is left over (up to 45 degrees) turns the head, and looking up/down tilts it
     const rest = turn - Math.round(turn / (Math.PI / 2)) * (Math.PI / 2);
-    return { id: L.id, rot, headTurn: Math.round(rest / (Math.PI / 6)), headTilt: -Math.round(L.pitch / 0.35) };
+    return { id: L.id, rot, twist: 0, headTurn: Math.round(rest / (Math.PI / 6)), headTilt: -Math.round(L.pitch / 0.35) };
   }
 
   // id of the person under the pointer, or null
@@ -826,6 +915,7 @@ export class DioramaView {
     t.x = Math.max(-lim, Math.min(lim, t.x));
     t.z = Math.max(-lim, Math.min(lim, t.z));
     t.y = Math.max(0, Math.min(this.world.height, t.y));
+    if (this.flowWaiting) this.updateFlowReveal();
     const moved = this.looking ? false : this.controls.update(); // the camera is driven by the person view while looking
     if (moved || this.dirty) {
       this.dirty = false;
@@ -839,6 +929,7 @@ export class DioramaView {
     this.renderer.getSize(oldSize);
     const oldPR = this.renderer.getPixelRatio();
     const oldAspect = this.camera.aspect;
+    this.updateFlowReveal(true);
     const helpersWere = this.helpers.visible;
     this.helpers.visible = false;
     this.renderer.setPixelRatio(1);

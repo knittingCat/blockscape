@@ -186,6 +186,42 @@ await test('people: head turn/tilt are clamped; lying on front is a pose', () =>
   assert.equal(w.addPerson({ x: 2, y: 0, z: 2, headTurn: 'x' }).headTurn, 0);
 });
 
+await test('water and lava flow: spread on the floor, fall off edges, stop at walls', () => {
+  const w = new World(16);
+  w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+  w.setMany([[8, 1, 8, 9]], { record: false }); // water source on the floor
+  let f = w.computeFlow();
+  assert.ok(f.every((c) => c.id === 9 && c.y === 1));
+  assert.ok(f.some((c) => c.x === 8 + 7 && c.z === 8)); // reaches 7 cells away
+  assert.ok(!f.some((c) => c.x === 8 + 8 && c.z === 8)); // but not 8
+  assert.ok(!f.some((c) => c.x === 8 && c.z === 8)); // the source itself is not a flow cell
+  w.setMany([[8, 1, 8, 0], [8, 1, 8, 10]], { record: false }); // lava instead
+  f = w.computeFlow();
+  assert.ok(f.every((c) => c.id === 10));
+  assert.ok(f.some((c) => c.x === 11 && c.z === 8) && !f.some((c) => c.x === 12 && c.z === 8)); // lava reaches 3
+  // a wall stops it
+  w.setMany([[9, 1, 8, 4]], { record: false });
+  assert.ok(!w.computeFlow().some((c) => c.x === 9 && c.z === 8));
+  // a source up on a tower falls to the ground in a column and spreads there
+  const t = new World(16);
+  t.setMany(t.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+  t.setMany([[5, 5, 5, 9]], { record: false });
+  const g = t.computeFlow();
+  for (let y = 1; y <= 4; y++) assert.ok(g.some((c) => c.x === 5 && c.y === y && c.z === 5 && c.fall), 'column at y' + y);
+  assert.ok(g.some((c) => c.y === 1 && c.x === 12 && c.z === 5)); // full reach at the bottom
+  // water meeting lava turns to cobblestone
+  const m = new World(16);
+  m.setMany(m.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+  m.setMany([[4, 1, 8, 9], [7, 1, 8, 10]], { record: false });
+  assert.ok(m.computeFlow().some((c) => c.id === 4));
+});
+
+await test('people: spin around is wrapped, head can turn a full way', () => {
+  const c = cleanPerson({ x: 0, y: 0, z: 0, twist: 14, headTurn: 9 });
+  assert.equal(c.twist, 2);
+  assert.equal(c.headTurn, 6);
+});
+
 await test('people: invalid values are cleaned, and they survive saving', async () => {
   const c = cleanPerson({ x: 1, y: 0, z: 1, shirt: 'red', hat: 'sombrero', skin: '#ABCDEF', name: 'x'.repeat(100), rot: -1 });
   assert.equal(c.shirt, PERSON_DEFAULTS.shirt);

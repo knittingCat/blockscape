@@ -325,7 +325,8 @@ function openPersonDialog(id) {
     </div>
     ${color('shoes', 'Shoes')}
     <div class="grid2">
-      <label>Head turn<input type="range" min="-3" max="3" step="1" data-prop="headTurn"></label>
+      <label>Spin around<input type="range" min="0" max="11" step="1" data-prop="twist"></label>
+      <label>Head turn<input type="range" min="-6" max="6" step="1" data-prop="headTurn"></label>
       <label>Head up / down<input type="range" min="-2" max="2" step="1" data-prop="headTilt"></label>
     </div>
     <label>Name (floats above their head)<input type="text" data-prop="name" maxlength="30" autocomplete="off" placeholder="optional"></label>
@@ -458,13 +459,23 @@ function stopLooking() {
   $('#lookBar').hidden = true;
   if (!r) return;
   const person = world.getPerson(r.id);
-  const next = { rot: r.rot, headTurn: r.headTurn ?? person?.headTurn, headTilt: r.headTilt ?? person?.headTilt };
+  const next = { rot: r.rot, twist: r.twist ?? person?.twist, headTurn: r.headTurn ?? person?.headTurn, headTilt: r.headTilt ?? person?.headTilt };
   if (person && Object.keys(next).some((k) => person[k] !== next[k])) {
     const before = { ...person };
     world.updatePerson(r.id, next);
     world.recordPersonEdit(r.id, before);
   }
   refreshHover();
+}
+
+function personAtCells(hit) {
+  if (!hit) return null;
+  for (const c of [hit.cell, hit.prev]) {
+    if (!c) continue;
+    const p = world.people.find((q) => q.x === c[0] && q.z === c[2] && (q.y === c[1] || q.y + 1 === c[1]));
+    if (p) return p.id;
+  }
+  return null;
 }
 
 async function actAt(e, button) {
@@ -484,7 +495,8 @@ async function actAt(e, button) {
     return;
   }
   const erasing = tool === 'erase' || button === 2 || e.shiftKey;
-  const personId = view.personAt(ray);
+  // a person is edited when you click them, or the cell their feet or head are in (even if that is a block's face)
+  const personId = view.personAt(ray) ?? (erasing ? null : personAtCells(hit));
   if (personId != null && !['box', 'select', 'paste'].includes(tool)) {
     if (erasing) world.removePerson(personId);
     else openPersonDialog(personId);
