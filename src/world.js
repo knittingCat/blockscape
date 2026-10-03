@@ -234,11 +234,15 @@ export class World {
             continue;
           }
           if (c.r < 1) continue;
-          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-            const nx = x + dx;
-            const nz = z + dz;
-            if (this.inBounds(nx, y, nz) && this.get(nx, y, nz) === 0) improve(next, nx, y, nz, c.r - 1, false, c.step + 1);
-          }
+          // like Minecraft: if a drop is within 4 cells, only flow toward the nearest one(s)
+          const open = [];
+          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (this.get(x + dx, y, z + dz) === 0 && this.inBounds(x + dx, y, z + dz)) open.push([dx, dz]);
+          const dists = open.map(([dx, dz]) => this.dropDistance(x, y, z, dx, dz));
+          const nearest = Math.min(...dists);
+          open.forEach(([dx, dz], k) => {
+            if (nearest <= 4 && dists[k] !== nearest) return;
+            improve(next, x + dx, y, z + dz, c.r - 1, false, c.step + 1);
+          });
         }
         layer = next;
       }
@@ -255,8 +259,37 @@ export class World {
       if (lava.has(i)) out.push({ x: c.x, y: c.y, z: c.z, id: 4, r: 0, fall: true, step: Math.max(c.step, lava.get(i).step) });
       else out.push({ ...c, id: 9 });
     }
-    for (const [i, c] of lava) if (!water.has(i)) out.push({ ...c, id: 10 });
+    // flowing lava that touches water (beside it or underneath it) cools to cobblestone; lava sources are left alone
+    const wet = (x, y, z) => this.get(x, y, z) === 9 || water.has(this.index(x, y, z));
+    for (const [i, c] of lava) {
+      if (water.has(i)) continue;
+      const touching = wet(c.x, c.y + 1, c.z) || wet(c.x + 1, c.y, c.z) || wet(c.x - 1, c.y, c.z) || wet(c.x, c.y, c.z + 1) || wet(c.x, c.y, c.z - 1);
+      out.push(touching ? { ...c, id: 4, r: 0, fall: true } : { ...c, id: 10 });
+    }
     return out;
+  }
+
+  // How many steps until a cell with nothing underneath, going first one step in (dx, dz) and then in any
+  // direction over empty cells. Up to 4 steps are looked at; returns 99 when there is no drop that close.
+  dropDistance(x, y, z, dx, dz) {
+    let frontier = [[x + dx, z + dz]];
+    const seen = new Set([`${x},${z}`, `${x + dx},${z + dz}`]);
+    for (let d = 1; d <= 4; d++) {
+      for (const [fx, fz] of frontier) if (this.get(fx, y - 1, fz) === 0 && y > 0) return d;
+      const next = [];
+      for (const [fx, fz] of frontier) {
+        for (const [ex, ez] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = fx + ex;
+          const nz = fz + ez;
+          const k = `${nx},${nz}`;
+          if (seen.has(k) || !this.inBounds(nx, y, nz) || this.get(nx, y, nz) !== 0) continue;
+          seen.add(k);
+          next.push([nx, nz]);
+        }
+      }
+      frontier = next;
+    }
+    return 99;
   }
 
   // ----- people -----

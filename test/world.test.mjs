@@ -216,6 +216,24 @@ await test('water and lava flow: spread on the floor, fall off edges, stop at wa
   assert.ok(m.computeFlow().some((c) => c.id === 4));
 });
 
+await test('flow prefers the way to a nearby drop; flowing lava next to water turns to cobblestone', () => {
+  const w = new World(16);
+  w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+  w.setMany([[10, 0, 8, 0]], { record: false }); // a hole in the floor 2 cells east of the source
+  w.setMany([[8, 1, 8, 9]], { record: false });
+  const f = w.computeFlow();
+  assert.ok(f.some((c) => c.x === 9 && c.y === 1 && c.z === 8));
+  assert.ok(f.some((c) => c.x === 10 && c.y === 0 && c.z === 8)); // pours into the hole
+  assert.ok(!f.some((c) => c.x === 7 && c.z === 8 && c.y === 1)); // does not go the other way
+  const m = new World(16);
+  m.setMany(m.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+  m.setMany([[8, 1, 8, 10], [10, 1, 8, 9]], { record: false });
+  const g = m.computeFlow();
+  assert.ok(g.some((c) => c.id === 4 && c.x === 9)); // lava flow touching the water cools
+  assert.ok(m.get(8, 1, 8) === 10); // the lava source itself stays lava (no obsidian)
+  assert.ok(!g.some((c) => c.id === 18));
+});
+
 await test('people: spin around is wrapped, head can turn a full way', () => {
   const c = cleanPerson({ x: 0, y: 0, z: 0, twist: 14, headTurn: 9 });
   assert.equal(c.twist, 2);

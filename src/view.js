@@ -308,7 +308,8 @@ export class DioramaView {
     // cells that are already showing appear at once; new ones spread out step by step
     const fresh = cells.filter((c) => !known.has(key(c)));
     const firstStep = fresh.length ? Math.min(...fresh.map((c) => c.step)) : 0;
-    for (const c of cells) c.t = known.has(key(c)) ? 0 : (c.step - firstStep + 1) * 0.14;
+    const STEP_TIME = { 9: 0.22, 10: 0.6, 4: 0.3 }; // lava creeps, water runs
+    for (const c of cells) c.t = known.has(key(c)) ? 0 : (c.step - firstStep + 1) * STEP_TIME[c.id];
     this.flowKnown = new Set(cells.map(key));
     const byId = new Map();
     for (const c of cells) {
