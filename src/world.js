@@ -56,6 +56,9 @@ export class World {
     this.labels = []; // { id, x, y, z, text }
     this.people = []; // { id, x, y, z, rot, skin, hair, ... } see PERSON_DEFAULTS
     this.nextPersonId = 1;
+    this.fire = new Set(); // indices of cells whose block is on fire (the flames are part of the diorama and are saved)
+    this.fireSpreading = false; // true while a fire is still spreading (not saved)
+    this.fireBefore = null;
     this.meta = { sky: 'day', title: '', subtitle: '' };
     this.undoStack = [];
     this.redoStack = [];
@@ -347,6 +350,81 @@ export class World {
     return 99;
   }
 
+  // ----- fire -----
+  // Light a block and the flames spread to flammable blocks next to it (wood, leaves, planks, wool) until the
+  // fire is stopped or runs out of fuel. Nothing is destroyed: the flames simply stay on the blocks as part of
+  // the diorama. Starting and stopping a fire is ONE undo step.
+  isFlammable(id) {
+    return id === 11 || id === 12 || id === 13 || (id >= 19 && id <= 28);
+  }
+  isBurning(x, y, z) {
+    return this.inBounds(x, y, z) && this.fire.has(this.index(x, y, z)) && this.cells[this.index(x, y, z)] !== 0;
+  }
+  // The burning cells that still have a block in them, as [x, y, z].
+  burningCells() {
+    const out = [];
+    for (const i of this.fire) if (this.cells[i]) out.push(this.coords(i));
+    return out;
+  }
+  startFire() {
+    if (this.fireSpreading) return;
+    this.fireSpreading = true;
+    this.fireBefore = [...this.fire];
+  }
+  stopFire() {
+    if (!this.fireSpreading) return false;
+    this.fireSpreading = false;
+    const before = this.fireBefore || [];
+    const after = [...this.fire];
+    this.fireBefore = null;
+    const same = before.length === after.length && before.every((i) => this.fire.has(i));
+    if (!same) {
+      this.undoStack.push({ fire: { before, after } });
+      this.redoStack.length = 0;
+      if (this.undoStack.length > 200) this.undoStack.shift();
+    }
+    this.emit({ type: 'fire' });
+    return true;
+  }
+  // Light (or put out) one block. Lighting leaves the fire spreading (the caller keeps calling fireTick and
+  // finally stopFire); putting one out is a complete one-step edit on its own.
+  setBurning(x, y, z, on) {
+    if (!this.inBounds(x, y, z) || !this.get(x, y, z)) return false;
+    const i = this.index(x, y, z);
+    if (this.fire.has(i) === on) return false;
+    const solo = !this.fireSpreading;
+    if (solo) this.startFire(); // remembers the flames as they were, for the undo step
+    if (on) this.fire.add(i);
+    else this.fire.delete(i);
+    this.emit({ type: 'fire' });
+    if (solo && !on) this.stopFire();
+    return true;
+  }
+  // One step of spreading. Returns true while the fire can still spread to something.
+  fireTick(rand = Math.random) {
+    const add = [];
+    let more = false;
+    for (const i of this.fire) {
+      if (!this.cells[i]) continue;
+      const [x, y, z] = this.coords(i);
+      for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0], [0, -1, 0]]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        const nz = z + dz;
+        if (!this.inBounds(nx, ny, nz)) continue;
+        const ni = this.index(nx, ny, nz);
+        if (this.fire.has(ni) || !this.isFlammable(this.cells[ni])) continue;
+        more = true;
+        if (rand() < (dy === 1 ? 0.5 : dy === -1 ? 0.15 : 0.3)) add.push(ni); // fire climbs easily, rarely creeps down
+      }
+    }
+    if (add.length) {
+      for (const ni of add) this.fire.add(ni);
+      this.emit({ type: 'fire' });
+    }
+    return more;
+  }
+
   // ----- people -----
   addPerson(props, { record = true, id } = {}) {
     const p = cleanPerson(props);
@@ -418,6 +496,11 @@ export class World {
         }
       }
       this.emit({ type: 'cells', changes });
+    }
+    if (step.fire) {
+      this.fire = new Set(reverse ? step.fire.before : step.fire.after);
+      this.fireSpreading = false;
+      this.emit({ type: 'fire' });
     }
     if (step.personAdd) {
       if (reverse) this.removePerson(step.personAdd.id, { record: false });
@@ -532,7 +615,7 @@ export class World {
     }
     varint(run);
     out.push(cur);
-    const json = new TextEncoder().encode(JSON.stringify({ labels: this.labels, meta: this.meta, people: this.people }));
+    const json = new TextEncoder().encode(JSON.stringify({ labels: this.labels, meta: this.meta, people: this.people, fire: this.burningCells().flat() }));
     const header = [];
     let n = json.length;
     while (n >= 128) {
@@ -573,6 +656,11 @@ export class World {
     const json = JSON.parse(new TextDecoder().decode(bytes.subarray(pos, pos + jsonLen)));
     for (const l of json.labels || []) world.addLabel(l.x, l.y, l.z, String(l.text).slice(0, 80), { record: false, id: l.id });
     for (const p of json.people || []) world.addPerson({ ...p }, { record: false, id: Number.isInteger(p.id) ? p.id : undefined });
+    const fire = Array.isArray(json.fire) ? json.fire : [];
+    for (let k = 0; k + 2 < fire.length; k += 3) {
+      const [x, y, z] = [fire[k], fire[k + 1], fire[k + 2]];
+      if (Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(z) && world.get(x, y, z)) world.fire.add(world.index(x, y, z));
+    }
     Object.assign(world.meta, json.meta || {});
     return world;
   }

@@ -277,6 +277,43 @@ await test('Clear leaves the starting scene alone and removes only what was adde
   assert.equal(w.getPerson(mine.id), null);
 });
 
+await test('fire: light a block, it spreads to flammable neighbours only, stop keeps it (one undo step), and it is saved', async () => {
+  const w = new World(16);
+  w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+  w.setMany([[4, 1, 4, 11], [5, 1, 4, 12], [6, 1, 4, 3], [7, 1, 4, 11]], { record: false }); // log, planks, STONE, log
+  assert.equal(w.setBurning(4, 1, 4, true), true);
+  assert.equal(w.fireSpreading, true);
+  assert.equal(w.setBurning(4, 1, 4, true), false); // already burning
+  assert.equal(w.setBurning(9, 5, 9, true), false); // nothing there
+  assert.equal(w.fireTick(() => 0), true); // can still spread
+  assert.ok(w.isBurning(5, 1, 4)); // planks caught
+  assert.ok(!w.isBurning(6, 1, 4)); // stone does not burn
+  assert.equal(w.fireTick(() => 0), false); // nothing left to spread to (the log behind the stone is out of reach)
+  assert.ok(!w.isBurning(7, 1, 4));
+  assert.equal(w.stopFire(), true);
+  assert.equal(w.fireSpreading, false);
+  assert.equal(w.burningCells().length, 2);
+  // saved and loaded
+  const back = await decodeWorld(await encodeWorld(w));
+  assert.equal(back.burningCells().length, 2);
+  assert.ok(back.isBurning(4, 1, 4) && back.isBurning(5, 1, 4));
+  assert.equal(back.fireSpreading, false);
+  // one undo step puts out everything that lit up in that session
+  w.undo();
+  assert.equal(w.burningCells().length, 0);
+  w.redo();
+  assert.equal(w.burningCells().length, 2);
+  // putting one block out is its own undo step
+  assert.equal(w.setBurning(5, 1, 4, false), true);
+  assert.equal(w.burningCells().length, 1);
+  w.undo();
+  assert.equal(w.burningCells().length, 2);
+  // removing a burning block drops its flames from the saved scene
+  w.setMany([[4, 1, 4, 0]]);
+  assert.equal(w.burningCells().length, 1);
+  assert.equal((await decodeWorld(await encodeWorld(w))).burningCells().length, 1);
+});
+
 await test('people: spin around is wrapped, head can turn a full way', () => {
   const c = cleanPerson({ x: 0, y: 0, z: 0, twist: 14, headTurn: 9 });
   assert.equal(c.twist, 2);

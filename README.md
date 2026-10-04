@@ -22,7 +22,7 @@ Live site: https://blockscape.onrender.com
 - Look through their eyes: drag to look around, and they turn to face the way you looked.
 
 **Share**
-- Picture: a PNG with an optional title and caption bar.
+- Picture: a high-quality JPEG (small file, a fraction of the size of a PNG) with an optional title and caption bar.
 - Share link: for a diorama saved to the gallery it copies a short link (`/#d=<id>`) that anyone can open without signing in. For anything else the whole scene is inside the link.
 - Save a diorama to your account. It also autosaves in the browser.
 - Anyone opening someone else's diorama sees it view-only, with a Report button.

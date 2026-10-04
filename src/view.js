@@ -51,6 +51,7 @@ export class DioramaView {
     this.scene.add(this.stars);
 
     this.initGlow();
+    this.initFire();
     this.helpers = new THREE.Group(); // hidden when taking pictures
     this.scene.add(this.helpers);
     this.makeCursor();
@@ -71,6 +72,7 @@ export class DioramaView {
       if (e.type === 'cells') this.rebuild(new Set(e.changes.flatMap((c) => [c.from, c.to])));
       else if (e.type === 'labels') this.rebuildLabels();
       else if (e.type === 'people') this.rebuildPeople();
+      else if (e.type === 'fire') this.scheduleFire();
     });
 
     this.loop = this.loop.bind(this);
@@ -377,6 +379,111 @@ export class DioramaView {
     this.applyGlow();
     this.dirty = true;
     this.scheduleFlow();
+    this.scheduleFire();
+  }
+
+  // ----- fire: flickering flames on burning blocks (the burning cells live in the world and are saved) -----
+  initFire() {
+    // four frames of pixel flames stacked in one texture
+    const c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 64;
+    const g = c.getContext('2d');
+    let seed = 7;
+    const rnd = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+    for (let f = 0; f < 4; f++) {
+      for (let x = 0; x < 16; x++) {
+        const edge = 1 - Math.abs(x - 7.5) / 9; // taller in the middle
+        const h = Math.max(3, Math.round(4 + edge * 8 + rnd() * 5));
+        for (let k = 0; k < h; k++) {
+          const t = k / 15; // 0 at the bottom of the flame, 1 at the very top
+          const col = t < 0.35 ? [255, 214, 70] : t < 0.65 ? [255, 140, 24] : [226, 56, 16];
+          g.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+          g.fillRect(x, f * 16 + 15 - k, 1, 1);
+        }
+      }
+    }
+    this.fireTexture = new THREE.CanvasTexture(c);
+    this.fireTexture.colorSpace = THREE.SRGBColorSpace;
+    this.fireTexture.magFilter = THREE.NearestFilter;
+    this.fireTexture.minFilter = THREE.NearestFilter;
+    this.fireTexture.repeat.set(1, 0.25);
+    this.fireTexture.offset.set(0, 0);
+    this.fireMaterial = new THREE.MeshBasicMaterial({ map: this.fireTexture, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
+    // two crossed flame planes standing on a cell's floor
+    const pos = [-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0, 0, 0, -0.5, 0, 0, 0.5, 0, 1, 0.5, 0, 1, -0.5];
+    const crossed = new THREE.BufferGeometry();
+    crossed.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    crossed.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1], 2));
+    crossed.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]);
+    this.fireGeometries = { top: crossed, side: new THREE.PlaneGeometry(1, 1) };
+    this.fireMeshes = {};
+    this.fireCount = 0;
+    this.fireFrame = 0;
+    // a soft orange glow over the flames
+    this.fireHalo = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: this.glowKinds.get(10).material.map, size: 3, color: 0xff8a30, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.3 }));
+    this.fireHalo.frustumCulled = false;
+    this.fireHalo.visible = false;
+    this.scene.add(this.fireHalo);
+  }
+
+  scheduleFire() {
+    if (this.firePending) return;
+    this.firePending = true;
+    requestAnimationFrame(() => {
+      this.firePending = false;
+      this.rebuildFire();
+    });
+  }
+
+  rebuildFire() {
+    const w = this.world;
+    const off = this.offset;
+    const tops = [];
+    const sides = [];
+    const halo = [];
+    for (const [x, y, z] of w.burningCells()) {
+      halo.push(x + 0.5 - off, y + 0.7, z + 0.5 - off);
+      if (w.inBounds(x, y + 1, z) && w.get(x, y + 1, z) === 0) tops.push([x + 0.5 - off, y + 1, z + 0.5 - off, 0]);
+      for (const [dx, dz, rot] of [[1, 0, Math.PI / 2], [-1, 0, Math.PI / 2], [0, 1, 0], [0, -1, 0]]) {
+        if (w.get(x + dx, y, z + dz) === 0) sides.push([x + 0.5 - off + dx * 0.51, y + 0.5, z + 0.5 - off + dz * 0.51, rot]);
+      }
+    }
+    this.fireCount = tops.length + sides.length;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const one = new THREE.Vector3(1, 1, 1);
+    for (const [kind, list] of [['top', tops], ['side', sides]]) {
+      let entry = this.fireMeshes[kind];
+      if (!entry || entry.capacity < list.length) {
+        if (entry) {
+          this.scene.remove(entry.mesh);
+          entry.mesh.dispose();
+        }
+        const capacity = Math.max(64, 2 ** Math.ceil(Math.log2(Math.max(list.length, 1))));
+        const mesh = new THREE.InstancedMesh(this.fireGeometries[kind], this.fireMaterial, capacity);
+        mesh.frustumCulled = false;
+        mesh.count = 0;
+        this.scene.add(mesh);
+        entry = { mesh, capacity };
+        this.fireMeshes[kind] = entry;
+      }
+      list.forEach(([x, y, z, rot], k) => {
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot);
+        m.compose(new THREE.Vector3(x, y, z), q, one);
+        entry.mesh.setMatrixAt(k, m);
+      });
+      entry.mesh.count = list.length;
+      entry.mesh.instanceMatrix.needsUpdate = true;
+    }
+    this.fireHalo.geometry.dispose();
+    this.fireHalo.geometry = new THREE.BufferGeometry();
+    this.fireHalo.geometry.setAttribute('position', new THREE.Float32BufferAttribute(halo, 3));
+    this.fireHalo.visible = halo.length > 0;
+    this.dirty = true;
   }
 
   // ----- flowing water and lava (worked out from the source blocks; see World.computeFlow) -----
@@ -522,6 +629,7 @@ export class DioramaView {
       if (e.type === 'cells') this.rebuild(new Set(e.changes.flatMap((c) => [c.from, c.to])));
       else if (e.type === 'labels') this.rebuildLabels();
       else if (e.type === 'people') this.rebuildPeople();
+      else if (e.type === 'fire') this.scheduleFire();
     });
   }
 
@@ -1033,6 +1141,14 @@ export class DioramaView {
     t.z = Math.max(-lim, Math.min(lim, t.z));
     t.y = Math.max(0, Math.min(this.world.height, t.y));
     if (this.flowWaiting) this.updateFlowReveal();
+    if (this.fireCount) {
+      const frame = Math.floor(performance.now() / 120) % 4; // flames flicker
+      if (frame !== this.fireFrame) {
+        this.fireFrame = frame;
+        this.fireTexture.offset.y = frame * 0.25;
+        this.dirty = true;
+      }
+    }
     const moved = this.looking ? false : this.controls.update(); // the camera is driven by the person view while looking
     if (moved || this.dirty) {
       this.dirty = false;

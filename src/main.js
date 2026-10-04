@@ -1009,9 +1009,9 @@ function wireUI() {
   $('#picDownload').addEventListener('click', (e) => {
     e.preventDefault();
     composePicture().toBlob((blob) => {
-      download(blob, `${slug($('#picTitle').value)}.png`);
-      toast('Picture saved to your Downloads folder.');
-    }, 'image/png');
+      download(blob, `${slug($('#picTitle').value)}.jpg`);
+      toast(`Picture saved to your Downloads folder (${Math.max(1, Math.round(blob.size / 1024))} KB).`);
+    }, 'image/jpeg', 0.92); // JPEG at high quality: looks the same but is a fraction of the size of a PNG
   });
 
   $('#helpBtn').addEventListener('click', () => $('#helpDialog').showModal());
