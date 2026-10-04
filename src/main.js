@@ -243,7 +243,6 @@ function updateBanner(shared) {
     ? `Viewing “${cloud.title}” by ${cloud.owner}. Drag to look around, scroll to zoom.`
     : "Viewing a shared diorama. Drag to look around, scroll to zoom.";
   $('#reportBtn').hidden = !(viewingOthers && accountApi);
-  $('#backGalleryBtn').hidden = !(viewingOthers && accountApi);
   // Someone else's diorama: no toolbar, no palette, no editing.
   document.body.classList.toggle('viewonly', !banner.hidden);
   if (!banner.hidden && view) {
@@ -916,7 +915,6 @@ function wireUI() {
   });
 
   $('#helpBtn').addEventListener('click', () => $('#helpDialog').showModal());
-  $('#backGalleryBtn').addEventListener('click', () => accountApi && accountApi.openGallery());
   $('#reportBtn').addEventListener('click', () => cloud && accountApi && accountApi.report(cloud.id, cloud.title));
   $('#ownBtn').addEventListener('click', async () => {
     history.replaceState(null, '', location.pathname + location.search);
