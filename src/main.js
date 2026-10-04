@@ -874,27 +874,10 @@ function wireUI() {
   const saveFile = async () => {
     const text = await encodeWorld(world);
     download(new Blob([text], { type: 'text/plain' }), `${slug(world.meta.title)}.blockscape`);
-    toast('Downloaded a file. Use Open file to load it again.');
+    toast('Downloaded a file.');
   };
   // With accounts, Save goes to your account; without a server it downloads a file as before.
   $('#saveBtn').addEventListener('click', () => (accountApi ? accountApi.save() : saveFile()));
-  $('#openBtn').addEventListener('click', () => $('#fileInput').click());
-  $('#fileInput').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      await loadFromText(await file.text());
-      cloud = null; // an opened file is not linked to a saved-online diorama
-      cloudState = '';
-      rememberCloud();
-      updateBanner(false);
-      scheduleSave();
-      toast('Opened ' + file.name);
-    } catch (err) {
-      toast("That file isn't a Blockscape diorama.");
-    }
-  });
 
   $('#linkBtn').addEventListener('click', async () => {
     let url = location.href.split('#')[0] + '#s=' + (await encodeWorld(world));
