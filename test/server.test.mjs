@@ -93,7 +93,7 @@ try {
 
   await test('everything needs a session', async () => {
     const anon = new Client();
-    for (const [m, p] of [['GET', '/api/gallery'], ['GET', '/api/dioramas/mine'], ['POST', '/api/dioramas'], ['GET', '/api/dioramas/1'], ['POST', '/api/report']]) {
+    for (const [m, p] of [['GET', '/api/gallery'], ['GET', '/api/dioramas/mine'], ['POST', '/api/dioramas'], ['GET', '/api/dioramas/1']]) {
       assert.equal((await anon.call(m, p, {})).status, 401, `${m} ${p}`);
     }
   });
@@ -298,6 +298,28 @@ try {
     assert.equal((await anon.call('GET', `/api/dioramas/${coded.json.id}/public`)).status, 404);
     assert.equal((await anon.call('GET', '/api/dioramas/99999/public')).status, 404);
     assert.equal((await anon.call('GET', '/api/dioramas/abc/public')).status, 404);
+  });
+
+  await test('reports can be sent without signing in (once per address), and admins see them', async () => {
+    const anon = new Client();
+    const pub = await ann.call('POST', '/api/dioramas', { title: 'Anon target', data: DATA, visibility: 'gallery' });
+    assert.equal((await anon.call('POST', '/api/report', { dioramaId: pub.json.id, reason: '' })).status, 400);
+    assert.equal((await anon.call('POST', '/api/report', { dioramaId: 999999, reason: 'x' })).status, 404);
+    const priv = await ann.call('POST', '/api/dioramas', { title: 'Anon private', data: DATA, visibility: 'private' });
+    assert.equal((await anon.call('POST', '/api/report', { dioramaId: priv.json.id, reason: 'x' })).status, 404);
+    assert.equal((await anon.call('POST', '/api/report', { dioramaId: pub.json.id, reason: 'Rude title' })).status, 200);
+    assert.equal((await anon.call('POST', '/api/report', { dioramaId: pub.json.id, reason: 'Again' })).status, 200); // accepted but not stored twice
+    const { rows } = await query(`SELECT reporter_id, reporter_ip, reason FROM ${T.reports} WHERE diorama_id = $1`, [pub.json.id]);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].reporter_id, null);
+    assert.ok(rows[0].reporter_ip && !rows[0].reporter_ip.includes('127.0.0.1')); // only a hash is kept
+    const dee = new Client();
+    assert.equal((await dee.call('POST', '/api/login', { username: 'dee_admin', password: 'longenough4' })).status, 200);
+    const list = await dee.call('GET', '/api/reports');
+    const mine = list.json.reports.find((r) => r.dioramaId === pub.json.id);
+    assert.ok(mine, 'an admin sees the anonymous report');
+    assert.equal(mine.reporter, 'someone not signed in');
+    assert.equal((await ben.call('GET', '/api/reports')).json.reports.length, 0); // non-admins see nothing
   });
 
   await test('brute-force protection on login', async () => {

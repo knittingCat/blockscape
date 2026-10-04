@@ -58,7 +58,7 @@ function buildCsp() {
 // Nobody reviews a report they wrote or one about their own diorama, so the owner never sees reports about
 // themselves; those wait for another admin (the Claude account).
 const REVIEWABLE = (me, isAdmin) => `
-  r.status = 'open' AND r.reporter_id <> ${me} AND o.id <> ${me}
+  r.status = 'open' AND r.reporter_id IS DISTINCT FROM ${me} AND o.id <> ${me}
   AND (r.assigned_to = ${me} OR (${isAdmin ? 'TRUE' : 'FALSE'} AND r.assigned_to IS NULL))`;
 
 async function countReports(user) {
@@ -312,7 +312,9 @@ export function createApp() {
     res.json({ owner: u[0].username, ownerId: u[0].id, locked: null, dioramas: rows.map((r) => card(r, r.dcode && !own && !open.has(r.id))) });
   }));
 
-  app.post('/api/report', needUser, rateLimiter({ windowMs: 600e3, max: 20 }), wrap(async (req, res) => {
+  // Anyone can report, signed in or not. People who are not signed in are limited more strictly.
+  const anonReportLimit = rateLimiter({ windowMs: 3600e3, max: 5 });
+  app.post('/api/report', rateLimiter({ windowMs: 600e3, max: 20 }), (req, res, next) => (req.user ? next() : anonReportLimit(req, res, next)), wrap(async (req, res) => {
     const id = Number(req.body.dioramaId);
     const reason = String(req.body.reason || '').trim().slice(0, 300);
     if (!Number.isInteger(id) || !reason) return bad(res, 400, 'Tell us briefly what is wrong.');
@@ -321,18 +323,20 @@ export function createApp() {
       [id],
     );
     if (!rows[0]) return bad(res, 404, 'Diorama not found.');
-    if (rows[0].owner_id === req.user.id) return bad(res, 400, 'That is your own diorama.');
+    const me = req.user ? req.user.id : 0; // 0 = not signed in (no user has id 0)
+    if (rows[0].owner_id === me) return bad(res, 400, 'That is your own diorama.');
     // A report about an admin's diorama goes to a different admin; if there is none, to a random other person.
     let assignedTo = null;
     if (rows[0].owner_admin) {
-      const admin = await query(`SELECT id FROM ${T.users} WHERE is_admin = TRUE AND id <> $1 AND id <> $2 ORDER BY random() LIMIT 1`, [rows[0].owner_id, req.user.id]);
+      const admin = await query(`SELECT id FROM ${T.users} WHERE is_admin = TRUE AND id <> $1 AND id <> $2 ORDER BY random() LIMIT 1`, [rows[0].owner_id, me]);
       if (admin.rows[0]) assignedTo = admin.rows[0].id;
       else {
-        const anyone = await query(`SELECT id FROM ${T.users} WHERE id <> $1 AND id <> $2 ORDER BY random() LIMIT 1`, [rows[0].owner_id, req.user.id]);
+        const anyone = await query(`SELECT id FROM ${T.users} WHERE id <> $1 AND id <> $2 ORDER BY random() LIMIT 1`, [rows[0].owner_id, me]);
         assignedTo = anyone.rows[0] ? anyone.rows[0].id : null;
       }
     }
-    await query(`INSERT INTO ${T.reports} (diorama_id, reporter_id, reason, assigned_to) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`, [id, req.user.id, reason, assignedTo]);
+    const ipHash = req.user ? null : sha256(`report:${req.ip}`);
+    await query(`INSERT INTO ${T.reports} (diorama_id, reporter_id, reporter_ip, reason, assigned_to) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, [id, req.user ? req.user.id : null, ipHash, reason, assignedTo]);
     res.json({ ok: true });
   }));
 
@@ -341,7 +345,7 @@ export function createApp() {
     const me = Number(req.user.id);
     const { rows } = await query(
       `SELECT r.id, r.reason, r.created_at, r.assigned_to, d.id AS diorama_id, d.title, d.visibility, o.id AS owner_id, o.username AS owner, p.username AS reporter
-       FROM ${T.reports} r JOIN ${T.dioramas} d ON d.id = r.diorama_id JOIN ${T.users} o ON o.id = d.owner_id JOIN ${T.users} p ON p.id = r.reporter_id
+       FROM ${T.reports} r JOIN ${T.dioramas} d ON d.id = r.diorama_id JOIN ${T.users} o ON o.id = d.owner_id LEFT JOIN ${T.users} p ON p.id = r.reporter_id
        WHERE ${REVIEWABLE(me, !!req.user.is_admin)} ORDER BY r.created_at`,
     );
     res.json({
@@ -353,7 +357,7 @@ export function createApp() {
         title: r.title,
         visibility: r.visibility,
         owner: r.owner,
-        reporter: req.user.is_admin ? r.reporter : null, // only admins see who reported
+        reporter: req.user.is_admin ? r.reporter || 'someone not signed in' : null, // only admins see who reported
         pickedForYou: r.assigned_to === me,
       })),
     });

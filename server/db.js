@@ -76,6 +76,10 @@ export async function initDb() {
     ALTER TABLE ${T.reports} ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open';
     ALTER TABLE ${T.reports} ADD COLUMN IF NOT EXISTS handled_by INTEGER REFERENCES ${T.users}(id) ON DELETE SET NULL;
     ALTER TABLE ${T.reports} ADD COLUMN IF NOT EXISTS handled_at TIMESTAMPTZ;
+    -- reports can be sent without signing in: no reporter, and a hash of the sender's address so one address can only report a diorama once
+    ALTER TABLE ${T.reports} ALTER COLUMN reporter_id DROP NOT NULL;
+    ALTER TABLE ${T.reports} ADD COLUMN IF NOT EXISTS reporter_ip TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS ${t('reports_anon_once')} ON ${T.reports} (diorama_id, reporter_ip) WHERE reporter_id IS NULL;
   `);
 
   // Case-insensitive uniqueness ("Ann" and "ann" are the same person). Not fatal if old data already clashes.
