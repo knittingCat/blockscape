@@ -127,3 +127,6 @@ body.viewonly #stage canvas { cursor: grab; }
 
 #reportsBtn { position: relative; }
 #reportsBtn .count { position: absolute; top: -6px; right: -6px; width: 1.15rem; height: 1.15rem; padding: 0; min-width: 0; line-height: 1.15rem; font-weight: 700; box-shadow: 0 0 0 2px #1a1d2b; }
+
+/* the hidden attribute must win over the display rules above (it was not hiding toolbar buttons) */
+[hidden] { display: none !important; }
