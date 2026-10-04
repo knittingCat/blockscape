@@ -103,6 +103,7 @@ export class World {
       changes.push({ i, from: this.cells[i], to: id });
       this.cells[i] = id;
     }
+    if (record) this.settleSources(changes);
     if (!changes.length) return 0;
     if (record) {
       this.undoStack.push({ cells: changes });
@@ -111,6 +112,31 @@ export class World {
     }
     this.emit({ type: 'cells', changes });
     return changes.length;
+  }
+
+  // A water or lava source with nothing under it drops until it rests on something. Called after an edit
+  // with the changes made so far; the moves are added to the same list (so they undo together).
+  settleSources(changes) {
+    const seen = new Set();
+    for (const c of [...changes]) {
+      const [x, y, z] = this.coords(c.i);
+      for (const yy of [y, y + 1]) {
+        const k = this.index(x, Math.min(yy, this.height - 1), z);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        let cy = Math.min(yy, this.height - 1);
+        const id = this.get(x, cy, z);
+        if (id !== 9 && id !== 10) continue;
+        let ny = cy;
+        while (ny > 0 && this.get(x, ny - 1, z) === 0) ny--;
+        if (ny === cy) continue;
+        const from = this.index(x, cy, z);
+        const to = this.index(x, ny, z);
+        changes.push({ i: from, from: id, to: 0 }, { i: to, from: 0, to: id });
+        this.cells[from] = 0;
+        this.cells[to] = id;
+      }
+    }
   }
 
   // Like setMany, but also adds text labels, all as ONE undo step (used by paste).
@@ -123,6 +149,7 @@ export class World {
       changes.push({ i, from: this.cells[i], to: id });
       this.cells[i] = id;
     }
+    this.settleSources(changes);
     const labelsAdd = [];
     for (const l of labelList) {
       if (!this.inBounds(l.x, l.y, l.z)) continue;
@@ -355,7 +382,7 @@ export class World {
   apply(step, reverse) {
     if (step.cells) {
       const changes = [];
-      for (const c of step.cells) {
+      for (const c of reverse ? [...step.cells].reverse() : step.cells) {
         const value = reverse ? c.from : c.to;
         if (this.cells[c.i] !== value) {
           changes.push({ i: c.i, from: this.cells[c.i], to: value });

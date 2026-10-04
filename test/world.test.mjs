@@ -234,6 +234,26 @@ await test('flow prefers the way to a nearby drop; flowing lava next to water tu
   assert.ok(!g.some((c) => c.id === 18));
 });
 
+await test('a water source in the air falls until it rests; undo puts it back', () => {
+  const w = new World(16);
+  w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+  w.setMany([[3, 6, 3, 9]]);
+  assert.equal(w.get(3, 6, 3), 0);
+  assert.equal(w.get(3, 1, 3), 9);
+  w.undo();
+  assert.equal(w.get(3, 1, 3), 0);
+  assert.equal(w.get(3, 6, 3), 0);
+  // a source on a block falls when the block under it is removed
+  w.setMany([[5, 1, 5, 3], [5, 2, 5, 10]]);
+  assert.equal(w.get(5, 2, 5), 10);
+  w.setMany([[5, 1, 5, 0]]);
+  assert.equal(w.get(5, 1, 5), 10);
+  assert.equal(w.get(5, 2, 5), 0);
+  w.undo();
+  assert.equal(w.get(5, 2, 5), 10);
+  assert.equal(w.get(5, 1, 5), 3);
+});
+
 await test('people: spin around is wrapped, head can turn a full way', () => {
   const c = cleanPerson({ x: 0, y: 0, z: 0, twist: 14, headTurn: 9 });
   assert.equal(c.twist, 2);
