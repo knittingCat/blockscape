@@ -258,8 +258,22 @@ function updateBanner(shared) {
 
 const isViewOnly = () => document.body.classList.contains('viewonly');
 
-async function loadFromText(text, { shared = false, cloud: cloudInfo = null } = {}) {
+// Record the starting scene (what Clear leaves alone). `restore` = a page reload: bring back the saved start.
+async function rememberStart(w, restore = false) {
+  try {
+    if (restore) {
+      const saved = store.get('start');
+      if (saved) w.markStart(await decodeWorld(saved));
+    } else {
+      w.markStart();
+      store.set('start', await encodeWorld(w));
+    }
+  } catch {}
+}
+
+async function loadFromText(text, { shared = false, cloud: cloudInfo = null, restore = false } = {}) {
   const w = await decodeWorld(text.trim());
+  await rememberStart(w, restore);
   sharedMode = shared;
   cloud = cloudInfo;
   attachWorld(w);
@@ -631,26 +645,29 @@ function copySelection(prefix = '') {
 
 // Remove every block and sign. One undo step brings everything back.
 function clearAll() {
-  // The automatic grass floor stays; use Select + Delete if you really want to remove it too.
-  const keepGrass = (x, y, z, id) => y === 0 && id === 1;
-  let anything = world.labels.length > 0 || world.people.length > 0;
+  // What was there when you started or opened the diorama (the grass, a starter tree, loaded parts) stays;
+  // use Select + Delete if you really want to remove those too.
+  const keep = (x, y, z, id) => (y === 0 && id === 1) || world.isStartCell(x, y, z, id);
+  const keepLabel = (l) => world.isStartLabel(l);
+  const keepPerson = (p) => world.isStartPerson(p);
+  let anything = world.labels.some((l) => !keepLabel(l)) || world.people.some((p) => !keepPerson(p));
   for (let i = 0; i < world.cells.length && !anything; i++) {
     const id = world.cells[i];
     if (id) {
       const [x, y, z] = world.coords(i);
-      if (!keepGrass(x, y, z, id)) anything = true;
+      if (!keep(x, y, z, id)) anything = true;
     }
   }
   if (!anything) {
-    toast('Nothing to clear — the grass floor stays.');
+    toast('Nothing to clear — only what you add can be cleared. The starting scene stays.');
     return;
   }
-  if (!confirm('Clear everything you built? The grass floor stays. You can undo this with Cmd/Ctrl+Z.')) return;
-  const r = world.clearRegion([0, 0, 0], [world.size - 1, world.height - 1, world.size - 1], { keep: keepGrass });
+  if (!confirm('Clear everything you added? What was there when you started or opened this diorama (like the grass and a tree) stays. You can undo this with Cmd/Ctrl+Z.')) return;
+  const r = world.clearRegion([0, 0, 0], [world.size - 1, world.height - 1, world.size - 1], { keep, keepLabel, keepPerson });
   selection = null;
   view.showSelection(null);
   const extra = [r.labels ? `${r.labels} sign${r.labels > 1 ? 's' : ''}` : '', r.people ? `${r.people} ${r.people > 1 ? 'people' : 'person'}` : ''].filter(Boolean).join(' and ');
-  toast(`Cleared ${r.blocks} blocks${extra ? ' and ' + extra : ''}. The grass floor stays. Cmd/Ctrl+Z brings it all back.`);
+  toast(`Cleared ${r.blocks} blocks${extra ? ' and ' + extra : ''}. The starting scene stays. Cmd/Ctrl+Z brings it all back.`);
   updateStatus();
 }
 
@@ -838,7 +855,7 @@ function wireUI() {
   $('#redo').addEventListener('click', () => world.redo());
 
   $('#newBtn').addEventListener('click', () => $('#newDialog').showModal());
-  $('#newDialog').addEventListener('close', () => {
+  $('#newDialog').addEventListener('close', async () => {
     const dlg = $('#newDialog');
     if (dlg.returnValue !== 'ok') return;
     sharedMode = false;
@@ -848,6 +865,7 @@ function wireUI() {
     updateBanner(false);
     history.replaceState(null, '', location.pathname + location.search);
     const w = makeScene(Number($('#newSize').value), $('#newKind').value);
+    await rememberStart(w);
     attachWorld(w);
     view.setWorld(w);
     scheduleSave();
@@ -1010,7 +1028,7 @@ async function loadStart(allowHash = true) {
   const saved = store.get('scene');
   if (saved) {
     try {
-      await loadFromText(saved);
+      await loadFromText(saved, { restore: true });
       return;
     } catch {}
   }
@@ -1032,7 +1050,7 @@ async function main() {
     makeThumb: () => view.snapshot(320, 200).toDataURL('image/jpeg', 0.72),
     toast,
     statusChanged: updateStatus,
-    onSignedOut: () => {
+    onSignedOut: async () => {
       // Signing out takes your diorama away: forget the browser copy and start from a blank scene.
       clearTimeout(cloudTimer);
       clearTimeout(saveTimer);
@@ -1045,6 +1063,7 @@ async function main() {
       sharedMode = false;
       selection = null;
       const fresh = makeScene(32, 'grass');
+      await rememberStart(fresh);
       attachWorld(fresh);
       view.setWorld(fresh);
       view.showSelection(null);
@@ -1070,6 +1089,13 @@ async function main() {
       }
     } catch {}
   }
+  // easter egg: once ever, at night, water and lava may spill off the stand into the void
+  view.voidOnce = !store.get('void-egg');
+  view.onVoid = () => {
+    store.set('void-egg', '1');
+    toast('Whoops — it spilled over the edge into the void.', 4500);
+  };
+  view.scheduleFlow();
   // ?cam=x,y,z,tx,ty,tz places the camera (used for test screenshots)
   const camParam = new URLSearchParams(location.search).get('cam');
   if (camParam) {

@@ -165,9 +165,28 @@ export class World {
     return changes.length + labelsAdd.length;
   }
 
+  // Remember what the scene looked like when it was created or opened (the "starting scene"): Clear leaves
+  // those blocks, signs and people alone and only removes what was added afterwards. `from` may be another
+  // world with the same size (used to restore the starting scene after a page reload).
+  markStart(from = this) {
+    if (from.size !== this.size) return;
+    const labelKey = (l) => `${l.x},${l.y},${l.z},${l.text}`;
+    this.start = { cells: from.cells.slice(), labels: new Set(from.labels.map(labelKey)), people: new Set(from.people.map((p) => p.id)) };
+  }
+  isStartCell(x, y, z, id) {
+    return !!this.start && this.start.cells[this.index(x, y, z)] === id;
+  }
+  isStartLabel(l) {
+    return !!this.start && this.start.labels.has(`${l.x},${l.y},${l.z},${l.text}`);
+  }
+  isStartPerson(p) {
+    return !!this.start && this.start.people.has(p.id);
+  }
+
   // Remove every block and sign inside the box (corners in any order) as ONE undo step.
-  // keep(x, y, z, id) => true leaves that block alone (used so Clear keeps the automatic grass floor).
-  clearRegion(a, b, { keep = null } = {}) {
+  // keep(x, y, z, id) => true leaves that block alone (used so Clear keeps the starting scene).
+  // keepLabel(label) / keepPerson(person) => true leaves that sign / person alone.
+  clearRegion(a, b, { keep = null, keepLabel = null, keepPerson = null } = {}) {
     const lo = [0, 1, 2].map((i) => Math.min(a[i], b[i]));
     const hi = [0, 1, 2].map((i) => Math.max(a[i], b[i]));
     const changes = [];
@@ -183,10 +202,12 @@ export class World {
       }
     }
     const inside = (l) => l.x >= lo[0] && l.x <= hi[0] && l.y >= lo[1] && l.y <= hi[1] && l.z >= lo[2] && l.z <= hi[2];
-    const labelsRemove = this.labels.filter(inside);
-    this.labels = this.labels.filter((l) => !inside(l));
-    const peopleRemove = this.people.filter(inside).map((p) => ({ ...p }));
-    this.people = this.people.filter((p) => !inside(p));
+    const goesL = (l) => inside(l) && !(keepLabel && keepLabel(l));
+    const goesP = (p) => inside(p) && !(keepPerson && keepPerson(p));
+    const labelsRemove = this.labels.filter(goesL);
+    this.labels = this.labels.filter((l) => !goesL(l));
+    const peopleRemove = this.people.filter(goesP).map((p) => ({ ...p }));
+    this.people = this.people.filter((p) => !goesP(p));
     if (!changes.length && !labelsRemove.length && !peopleRemove.length) return { blocks: 0, labels: 0, people: 0 };
     this.undoStack.push({ cells: changes, labelsRemove, peopleRemove });
     this.redoStack.length = 0;
@@ -239,32 +260,43 @@ export class World {
   // Flow is worked out from the sources each time (nothing extra is saved). Where water and lava flows
   // meet, the cell turns to cobblestone. Returns [{ x, y, z, id, r, fall, step }] (r = reach left, step = how
   // many steps from the source, used to animate the spreading).
-  computeFlow(cap = 30000) {
-    const result = new Map(); // fluid id -> Map(index -> cell)
+  // With { void: true } (the night-mode easter egg) the stand has no edge: liquid spills over the side and falls
+  // away into the void (down to y = -16).
+  computeFlow(cap = 30000, { void: edge = false } = {}) {
+    const bottom = edge ? -16 : 0; // nothing flows below this level
+    const key = (x, y, z) => `${x},${y},${z}`;
+    const canFall = (x, y, z) => y > bottom && this.get(x, y - 1, z) === 0;
+    const canEnter = (x, y, z) => this.get(x, y, z) === 0 && (edge || this.inBounds(x, y, z));
+    const result = new Map(); // fluid id -> Map(key -> cell)
     for (const [fid, R] of [[9, 7], [10, 3]]) {
       const best = new Map();
       let layer = [];
-      for (let i = 0; i < this.cells.length; i++) if (this.cells[i] === fid) layer.push({ i, r: R, step: 0 });
+      for (let i = 0; i < this.cells.length; i++) {
+        if (this.cells[i] === fid) {
+          const [x, y, z] = this.coords(i);
+          layer.push({ x, y, z, r: R, step: 0 });
+        }
+      }
       const improve = (next, x, y, z, r, fall, step) => {
-        const i = this.index(x, y, z);
-        const cur = best.get(i);
+        const k = key(x, y, z);
+        const cur = best.get(k);
         if (cur && (r < cur.r || (r === cur.r && (!fall || cur.fall)))) return;
-        best.set(i, { x, y, z, r, fall, step: cur ? Math.min(cur.step, step) : step });
-        next.push({ i, r, step });
+        best.set(k, { x, y, z, r, fall, step: cur ? Math.min(cur.step, step) : step });
+        next.push({ x, y, z, r, step });
       };
       while (layer.length && best.size < cap) {
         const next = [];
         for (const c of layer) {
-          const [x, y, z] = this.coords(c.i);
-          if (y > 0 && this.get(x, y - 1, z) === 0) {
+          const { x, y, z } = c;
+          if (canFall(x, y, z)) {
             improve(next, x, y - 1, z, R, true, c.step + 1);
             continue;
           }
           if (c.r < 1) continue;
           // like Minecraft: if a drop is within 4 cells, only flow toward the nearest one(s)
           const open = [];
-          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (this.get(x + dx, y, z + dz) === 0 && this.inBounds(x + dx, y, z + dz)) open.push([dx, dz]);
-          const dists = open.map(([dx, dz]) => this.dropDistance(x, y, z, dx, dz));
+          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (canEnter(x + dx, y, z + dz)) open.push([dx, dz]);
+          const dists = open.map(([dx, dz]) => this.dropDistance(x, y, z, dx, dz, edge));
           const nearest = Math.min(...dists);
           open.forEach(([dx, dz], k) => {
             if (nearest <= 4 && dists[k] !== nearest) return;
@@ -274,22 +306,21 @@ export class World {
         layer = next;
       }
       for (const cell of best.values()) {
-        const above = this.get(cell.x, cell.y + 1, cell.z);
-        if (above === fid || best.has(this.index(cell.x, cell.y + 1, cell.z))) cell.fall = true;
+        if (this.get(cell.x, cell.y + 1, cell.z) === fid || best.has(key(cell.x, cell.y + 1, cell.z))) cell.fall = true;
       }
       result.set(fid, best);
     }
     const out = [];
     const water = result.get(9);
     const lava = result.get(10);
-    for (const [i, c] of water) {
-      if (lava.has(i)) out.push({ x: c.x, y: c.y, z: c.z, id: 4, r: 0, fall: true, step: Math.max(c.step, lava.get(i).step) });
+    for (const [k, c] of water) {
+      if (lava.has(k)) out.push({ x: c.x, y: c.y, z: c.z, id: 4, r: 0, fall: true, step: Math.max(c.step, lava.get(k).step) });
       else out.push({ ...c, id: 9 });
     }
     // flowing lava that touches water (beside it or underneath it) cools to cobblestone; lava sources are left alone
-    const wet = (x, y, z) => this.get(x, y, z) === 9 || water.has(this.index(x, y, z));
-    for (const [i, c] of lava) {
-      if (water.has(i)) continue;
+    const wet = (x, y, z) => this.get(x, y, z) === 9 || water.has(key(x, y, z));
+    for (const [k, c] of lava) {
+      if (water.has(k)) continue;
       const touching = wet(c.x, c.y + 1, c.z) || wet(c.x + 1, c.y, c.z) || wet(c.x - 1, c.y, c.z) || wet(c.x, c.y, c.z + 1) || wet(c.x, c.y, c.z - 1);
       out.push(touching ? { ...c, id: 4, r: 0, fall: true } : { ...c, id: 10 });
     }
@@ -298,18 +329,19 @@ export class World {
 
   // How many steps until a cell with nothing underneath, going first one step in (dx, dz) and then in any
   // direction over empty cells. Up to 4 steps are looked at; returns 99 when there is no drop that close.
-  dropDistance(x, y, z, dx, dz) {
+  dropDistance(x, y, z, dx, dz, edge = false) {
+    const bottom = edge ? -16 : 0;
     let frontier = [[x + dx, z + dz]];
     const seen = new Set([`${x},${z}`, `${x + dx},${z + dz}`]);
     for (let d = 1; d <= 4; d++) {
-      for (const [fx, fz] of frontier) if (this.get(fx, y - 1, fz) === 0 && y > 0) return d;
+      for (const [fx, fz] of frontier) if (y > bottom && this.get(fx, y - 1, fz) === 0) return d;
       const next = [];
       for (const [fx, fz] of frontier) {
         for (const [ex, ez] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const nx = fx + ex;
           const nz = fz + ez;
           const k = `${nx},${nz}`;
-          if (seen.has(k) || !this.inBounds(nx, y, nz) || this.get(nx, y, nz) !== 0) continue;
+          if (seen.has(k) || this.get(nx, y, nz) !== 0 || !(edge || this.inBounds(nx, y, nz))) continue;
           seen.add(k);
           next.push([nx, nz]);
         }

@@ -254,6 +254,41 @@ await test('a water source in the air falls until it rests; undo puts it back', 
   assert.equal(w.get(5, 1, 5), 3);
 });
 
+await test('night easter egg: with void on, liquid spills off the edge and falls away', () => {
+  const w = new World(16);
+  w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+  w.setMany([[1, 1, 8, 9]], { record: false }); // water source 1 cell from the west edge
+  const normal = w.computeFlow();
+  assert.ok(normal.every((c) => c.x >= 0 && c.x < 16 && c.y >= 0)); // normally it stays on the stand
+  const spill = w.computeFlow(30000, { void: true });
+  assert.ok(spill.some((c) => c.x < 0), 'flows past the edge');
+  assert.ok(spill.some((c) => c.x < 0 && c.y < 0), 'and falls into the void');
+  assert.ok(spill.every((c) => c.y >= -16));
+});
+
+await test('Clear leaves the starting scene alone and removes only what was added', () => {
+  const w = new World(16);
+  w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+  w.setMany([[3, 1, 3, 11], [3, 2, 3, 13]], { record: false }); // a starter tree
+  w.addLabel(4, 1, 4, 'Start');
+  w.addPerson({ x: 5, y: 1, z: 5, name: 'Old' }, { record: false });
+  w.markStart();
+  w.setMany([[8, 1, 8, 3]]); // added later
+  w.addLabel(9, 1, 9, 'New');
+  const mine = w.addPerson({ x: 6, y: 1, z: 6, name: 'New' });
+  const r = w.clearRegion([0, 0, 0], [15, 31, 15], {
+    keep: (x, y, z, id) => (y === 0 && id === 1) || w.isStartCell(x, y, z, id),
+    keepLabel: (l) => w.isStartLabel(l),
+    keepPerson: (p) => w.isStartPerson(p),
+  });
+  assert.equal(r.blocks, 1);
+  assert.equal(w.get(3, 1, 3), 11); // tree stays
+  assert.equal(w.get(8, 1, 8), 0);
+  assert.deepEqual(w.labels.map((l) => l.text), ['Start']);
+  assert.deepEqual(w.people.map((p) => p.name), ['Old']);
+  assert.equal(w.getPerson(mine.id), null);
+});
+
 await test('people: spin around is wrapped, head can turn a full way', () => {
   const c = cleanPerson({ x: 0, y: 0, z: 0, twist: 14, headTurn: 9 });
   assert.equal(c.twist, 2);
