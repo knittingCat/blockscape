@@ -225,6 +225,15 @@ export class DioramaView {
       this.scene.add(points);
       this.glowKinds.set(id, { material, points });
     }
+    // a fixed number of soft lights (changing the count would make the shaders rebuild); they sit over the biggest
+    // groups of glowstone and lava and gently light the blocks around them
+    this.glowLights = [];
+    for (let i = 0; i < 8; i++) {
+      const l = new THREE.PointLight(0xffc766, 0, 9, 1.6);
+      l.userData.base = 0;
+      this.scene.add(l);
+      this.glowLights.push(l);
+    }
     // halos for flowing lava (follows the animated flow, see updateFlowReveal)
     this.lavaFlowPoints = new THREE.Points(new THREE.BufferGeometry(), this.glowKinds.get(10).material);
     this.lavaFlowPoints.frustumCulled = false;
@@ -236,11 +245,21 @@ export class DioramaView {
     const w = this.world;
     const off = this.offset;
     const ptsById = new Map([...this.glowKinds.keys()].map((id) => [id, []]));
+    const buckets = new Map();
     for (let i = 0; i < w.cells.length; i++) {
-      const pts = ptsById.get(w.cells[i]);
+      const id = w.cells[i];
+      const pts = ptsById.get(id);
       if (!pts) continue;
       const [x, y, z] = w.coords(i);
-      pts.push(x + 0.5 - off, y + 0.5, z + 0.5 - off);
+      const p = [x + 0.5 - off, y + 0.5, z + 0.5 - off];
+      pts.push(...p);
+      const k = `${id}:${Math.floor(x / 6)},${Math.floor(y / 6)},${Math.floor(z / 6)}`;
+      const b = buckets.get(k) || { id, n: 0, x: 0, y: 0, z: 0 };
+      b.n++;
+      b.x += p[0];
+      b.y += p[1];
+      b.z += p[2];
+      buckets.set(k, b);
     }
     for (const [id, { points }] of this.glowKinds) {
       const pts = ptsById.get(id);
@@ -249,6 +268,15 @@ export class DioramaView {
       points.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
       points.visible = pts.length > 0;
     }
+    const top = [...buckets.values()].sort((a, b) => b.n - a.n).slice(0, this.glowLights.length);
+    this.glowLights.forEach((l, i) => {
+      const b = top[i];
+      if (b) {
+        l.position.set(b.x / b.n, b.y / b.n + 0.7, b.z / b.n);
+        l.color.setHex(b.id === 10 ? 0xff7a30 : 0xffd070);
+        l.userData.base = Math.min(1.1, 0.35 + 0.1 * b.n);
+      } else l.userData.base = 0;
+    });
     this.applyGlow();
     this.dirty = true;
   }
@@ -256,6 +284,7 @@ export class DioramaView {
   applyGlow() {
     const night = this.world.meta.sky === 'night';
     for (const { material } of this.glowKinds.values()) material.opacity = night ? material.userData.night : material.userData.day;
+    for (const l of this.glowLights || []) l.intensity = l.userData.base * (night ? 2 : 0.7);
     for (const mats of this.materials.values()) for (const m of mats) if (m.userData.glow) m.emissiveIntensity = m.userData.glow * (night ? 1.4 : 0.8);
   }
 
@@ -325,7 +354,7 @@ export class DioramaView {
         const capacity = Math.max(256, 2 ** Math.ceil(Math.log2(Math.max(idx.length, 1))));
         const mesh = new THREE.InstancedMesh(this.geometry, this.blockMaterials(block), capacity);
         mesh.frustumCulled = false;
-        mesh.castShadow = !block.alpha;
+        mesh.castShadow = !block.alpha && !block.glow; // glowing blocks are light sources: no dark shadow under them
         mesh.receiveShadow = true;
         mesh.renderOrder = block.alpha ? 2 : 0;
         mesh.count = 0;
@@ -396,7 +425,7 @@ export class DioramaView {
         const block = BLOCK_BY_ID.get(id);
         const mesh = new THREE.InstancedMesh(this.geometry, this.blockMaterials(block), capacity);
         mesh.frustumCulled = false;
-        mesh.castShadow = !block.alpha;
+        mesh.castShadow = !block.alpha && !block.glow; // glowing blocks are light sources: no dark shadow under them
         mesh.receiveShadow = true;
         mesh.renderOrder = block.alpha ? 2 : 0;
         mesh.count = 0;

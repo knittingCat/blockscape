@@ -418,5 +418,5 @@ export async function initAccount(ctx) {
     }
   }
 
-  return { openGallery: galleryView, save, promptIfSignedOut, report: (id, title) => reportView(id, title), // no sign-in needed isSignedIn: () => !!user };
+  return { openGallery: galleryView, save, promptIfSignedOut, report: (id, title) => reportView(id, title), isSignedIn: () => !!user };
 }
