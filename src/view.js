@@ -50,6 +50,7 @@ export class DioramaView {
     this.stars = this.makeStars();
     this.scene.add(this.stars);
 
+    this.initGlow();
     this.helpers = new THREE.Group(); // hidden when taking pictures
     this.scene.add(this.helpers);
     this.makeCursor();
@@ -199,8 +200,72 @@ export class DioramaView {
     this.dirty = true;
   }
 
+  // ----- glowstone glow: a soft halo around every glowstone block, plus a few real lights that brighten what is nearby -----
+  initGlow() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,236,170,1)');
+    grad.addColorStop(0.35, 'rgba(255,200,90,0.45)');
+    grad.addColorStop(1, 'rgba(255,170,60,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this.glowMaterial = new THREE.PointsMaterial({ map: tex, size: 3.4, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5 });
+    this.glowPoints = new THREE.Points(new THREE.BufferGeometry(), this.glowMaterial);
+    this.glowPoints.frustumCulled = false;
+    this.glowPoints.visible = false;
+    this.scene.add(this.glowPoints);
+    // a fixed number of lights (changing the count would make the shaders rebuild)
+    this.glowLights = [];
+    for (let i = 0; i < 8; i++) {
+      const l = new THREE.PointLight(0xffc766, 0, 11, 1.6);
+      l.userData.base = 0;
+      this.scene.add(l);
+      this.glowLights.push(l);
+    }
+  }
+
+  rebuildGlow() {
+    const w = this.world;
+    const off = this.offset;
+    const pts = [];
+    const buckets = new Map();
+    for (let i = 0; i < w.cells.length; i++) {
+      if (w.cells[i] !== 16) continue;
+      const [x, y, z] = w.coords(i);
+      const p = [x + 0.5 - off, y + 0.5, z + 0.5 - off];
+      pts.push(...p);
+      const k = `${Math.floor(x / 6)},${Math.floor(y / 6)},${Math.floor(z / 6)}`;
+      const b = buckets.get(k) || { n: 0, x: 0, y: 0, z: 0 };
+      b.n++;
+      b.x += p[0];
+      b.y += p[1];
+      b.z += p[2];
+      buckets.set(k, b);
+    }
+    this.glowPoints.geometry.dispose();
+    this.glowPoints.geometry = new THREE.BufferGeometry();
+    this.glowPoints.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    this.glowPoints.visible = pts.length > 0;
+    const top = [...buckets.values()].sort((a, b) => b.n - a.n).slice(0, this.glowLights.length);
+    this.glowLights.forEach((l, i) => {
+      const b = top[i];
+      if (b) {
+        l.position.set(b.x / b.n, b.y / b.n + 0.6, b.z / b.n);
+        l.userData.base = Math.min(2.2, 0.7 + 0.18 * b.n);
+      } else l.userData.base = 0;
+    });
+    this.applyGlow();
+    this.dirty = true;
+  }
+
   applyGlow() {
     const night = this.world.meta.sky === 'night';
+    this.glowMaterial.opacity = night ? 0.85 : 0.4;
+    for (const l of this.glowLights) l.intensity = l.userData.base * (night ? 2.2 : 0.8);
     for (const mats of this.materials.values()) for (const m of mats) if (m.userData.glow) m.emissiveIntensity = m.userData.glow * (night ? 1.4 : 0.8);
   }
 
@@ -285,6 +350,10 @@ export class DioramaView {
       }
       entry.mesh.count = idx.length;
       entry.mesh.instanceMatrix.needsUpdate = true;
+    }
+    if (this.glowPoints && (types.has(16) || !this.glowBuilt)) {
+      this.glowBuilt = true;
+      this.rebuildGlow();
     }
     this.applyGlow();
     this.dirty = true;
