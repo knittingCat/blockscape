@@ -397,10 +397,10 @@ export class DioramaView {
     for (let f = 0; f < 4; f++) {
       for (let x = 0; x < 16; x++) {
         const edge = 1 - Math.abs(x - 7.5) / 9; // taller in the middle
-        const h = Math.max(3, Math.round(4 + edge * 8 + rnd() * 5));
+        const h = Math.max(5, Math.min(16, Math.round(6 + edge * 7 + rnd() * 5)));
         for (let k = 0; k < h; k++) {
           const t = k / 15; // 0 at the bottom of the flame, 1 at the very top
-          const col = t < 0.35 ? [255, 214, 70] : t < 0.65 ? [255, 140, 24] : [226, 56, 16];
+          const col = t < 0.22 ? [255, 226, 90] : t < 0.55 ? [255, 150, 28] : [226, 56, 16];
           g.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
           g.fillRect(x, f * 16 + 15 - k, 1, 1);
         }

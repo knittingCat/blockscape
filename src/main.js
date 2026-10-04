@@ -286,6 +286,7 @@ async function doCloudSave() {
 
 function attachWorld(w) {
   world = w;
+  updateFireBar();
   world.onChange(() => {
     updateStatus();
     scheduleSave();
@@ -500,6 +501,8 @@ function refreshHover(e) {
   }
   if (tool === 'person') {
     view.showGhost(hit.prev, { color: 0xffffff, opacity: 0.18 });
+  } else if (tool === 'fire') {
+    view.showGhost(hit.cell, { color: 0xff7a20, opacity: 0.3, scale: 1.03 });
   } else if (tool === 'pick') {
     view.showGhost(hit.cell, { color: 0xffffff, opacity: 0.25, scale: 1.03 });
   } else if (tool === 'label') {
@@ -548,6 +551,33 @@ function personAtCells(hit) {
     if (p) return p.id;
   }
   return null;
+}
+
+// ----- fire: spreads a little every 0.6 s until you stop it or it runs out of fuel -----
+let fireTimer = null;
+function updateFireBar() {
+  $('#fireBar').hidden = !(world && world.fireSpreading);
+}
+function stopFireNow(auto = false) {
+  if (!world.fireSpreading) return;
+  world.stopFire();
+  clearInterval(fireTimer);
+  fireTimer = null;
+  updateFireBar();
+  toast(auto ? 'The fire has nothing left to spread to. The flames stay as part of your diorama.' : 'Fire stopped. The flames stay as part of your diorama.', 4000);
+}
+function startFireTimer() {
+  updateFireBar();
+  if (fireTimer) return;
+  fireTimer = setInterval(() => {
+    if (!world.fireSpreading) {
+      clearInterval(fireTimer); // undone, or a different diorama was opened
+      fireTimer = null;
+      updateFireBar();
+      return;
+    }
+    if (!world.fireTick()) stopFireNow(true);
+  }, 600);
 }
 
 async function actAt(e, button) {
@@ -629,6 +659,13 @@ async function actAt(e, button) {
     }
     world.setManyWithLabels(p.cells, p.labels);
     toast(`Pasted ${p.cells.length} blocks. Click again to paste another, or press Done.`);
+    return;
+  }
+  if (tool === 'fire') {
+    if (!hit.cell) return;
+    const [fx, fy, fz] = hit.cell;
+    if (world.isBurning(fx, fy, fz)) world.setBurning(fx, fy, fz, false); // click a burning block to put it out
+    else if (world.setBurning(fx, fy, fz, true)) startFireTimer(); // light it; the fire spreads until stopped
     return;
   }
   if (tool === 'pick') {
@@ -1022,6 +1059,7 @@ function wireUI() {
   });
 
   $('#lookDone').onclick = stopLooking;
+  $('#fireStop').onclick = () => stopFireNow(false);
   window.addEventListener('keydown', (e) => {
     if (view.looking) {
       if (e.key === 'Escape' || e.key === 'Enter') stopLooking();
@@ -1062,11 +1100,13 @@ function wireUI() {
     else if (key === 'p') placeAtPointer(e);
     else if (key === 'v') clip ? setTool('paste') : toast('Nothing to paste yet — use Select on an area first.');
     else if (key === 'h') setTool('person');
+    else if (key === 'f') setTool('fire');
     else if (key === 'q') rotateClip();
     else if (key === 'm') mirrorClip();
     else if (key === 'y') cycleSymmetry();
     else if (key === 'i') setTool('pick');
     else if (key === 't') setTool('label');
+    else if (e.key === 'Escape' && world.fireSpreading) stopFireNow(false);
     else if (e.key === 'Escape') {
       boxA = null;
       selA = null;
