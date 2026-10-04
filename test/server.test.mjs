@@ -268,6 +268,23 @@ try {
     assert.equal((await dee.call('GET', `/api/dioramas/${made.json.id}`)).status, 404); // gone
   });
 
+  await test('if nobody else can be picked, the admin who owns the diorama deals with the report', async () => {
+    const dee = new Client();
+    assert.equal((await dee.call('POST', '/api/login', { username: 'dee_admin', password: 'longenough4' })).status, 200);
+    const made = await dee.call('POST', '/api/dioramas', { title: 'Dee third', data: DATA, visibility: 'gallery' });
+    // as if Ann reported it when she was the only other person: nobody was picked
+    const who = await query(`SELECT id FROM ${T.users} WHERE LOWER(username) = 'ann'`);
+    await query(`INSERT INTO ${T.reports} (diorama_id, reporter_id, reason) VALUES ($1,$2,'Only one')`, [made.json.id, who.rows[0].id]);
+    const list = await dee.call('GET', '/api/reports');
+    assert.equal(list.json.reports.length, 1);
+    assert.equal(list.json.reports[0].aboutYou, true);
+    assert.equal((await ann.call('GET', '/api/reports')).json.reports.length, 0);
+    assert.equal((await ben.call('GET', '/api/reports')).json.reports.length, 0);
+    assert.equal((await dee.call('GET', '/api/me')).json.user.pendingReports, 1);
+    assert.equal((await dee.call('POST', `/api/reports/${list.json.reports[0].id}/action`, { action: 'dismiss' })).status, 200);
+    assert.equal((await dee.call('GET', '/api/reports')).json.reports.length, 0);
+  });
+
   await test('brute-force protection on login', async () => {
     const attacker = new Client();
     let last;

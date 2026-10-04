@@ -54,11 +54,13 @@ function buildCsp() {
 
 // SQL used to decide which open reports a person may review.
 //   - a report assigned to them (this is how reports about an admin's diorama reach someone else), or
-//   - for admins: unassigned reports about non-admin owners.
-// Nobody reviews a report they wrote or one about their own diorama.
+//   - for admins: unassigned reports about non-admin owners, and unassigned reports about their OWN diorama
+//     (nobody else could be picked, so the owner deals with it).
+// Nobody reviews a report they wrote.
 const REVIEWABLE = (me, isAdmin) => `
-  r.status = 'open' AND r.reporter_id <> ${me} AND o.id <> ${me}
-  AND (r.assigned_to = ${me} OR (${isAdmin ? 'TRUE' : 'FALSE'} AND r.assigned_to IS NULL AND o.is_admin = FALSE))`;
+  r.status = 'open' AND r.reporter_id <> ${me}
+  AND ((r.assigned_to = ${me} AND o.id <> ${me})
+    OR (${isAdmin ? 'TRUE' : 'FALSE'} AND r.assigned_to IS NULL AND (o.is_admin = FALSE OR o.id = ${me}) ))`;
 
 async function countReports(user) {
   const { rows } = await query(
@@ -325,7 +327,7 @@ export function createApp() {
   app.get('/api/reports', needUser, wrap(async (req, res) => {
     const me = Number(req.user.id);
     const { rows } = await query(
-      `SELECT r.id, r.reason, r.created_at, r.assigned_to, d.id AS diorama_id, d.title, d.visibility, o.username AS owner, p.username AS reporter
+      `SELECT r.id, r.reason, r.created_at, r.assigned_to, d.id AS diorama_id, d.title, d.visibility, o.id AS owner_id, o.username AS owner, p.username AS reporter
        FROM ${T.reports} r JOIN ${T.dioramas} d ON d.id = r.diorama_id JOIN ${T.users} o ON o.id = d.owner_id JOIN ${T.users} p ON p.id = r.reporter_id
        WHERE ${REVIEWABLE(me, !!req.user.is_admin)} ORDER BY r.created_at`,
     );
@@ -340,6 +342,7 @@ export function createApp() {
         owner: r.owner,
         reporter: req.user.is_admin ? r.reporter : null, // only admins see who reported
         pickedForYou: r.assigned_to === me,
+        aboutYou: r.owner_id === me,
       })),
     });
   }));
