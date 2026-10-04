@@ -200,7 +200,7 @@ export class DioramaView {
     this.dirty = true;
   }
 
-  // ----- glowstone glow: a soft halo around every glowstone block, plus a few real lights that brighten what is nearby -----
+  // ----- glow: a faint halo around glowstone and lava blocks -----
   initGlow() {
     // glowstone and lava: wide, faint halos (tinted by each material's colour), so overlapping ones stay soft instead of blowing out
     const soft = document.createElement('canvas');
@@ -214,7 +214,7 @@ export class DioramaView {
     sg.fillRect(0, 0, 64, 64);
     const softTex = new THREE.CanvasTexture(soft);
     softTex.colorSpace = THREE.SRGBColorSpace;
-    for (const [id, color, size, map, day, night] of [[16, 0xffd070, 7.0, softTex, 0.22, 0.45], [10, 0xff7a30, 7.5, softTex, 0.22, 0.45]]) {
+    for (const [id, color, size, map, day, night] of [[16, 0xffd070, 5.0, softTex, 0.09, 0.18], [10, 0xff7a30, 7.5, softTex, 0.22, 0.45]]) {
       const material = new THREE.PointsMaterial({ map, size, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: day });
       material.userData.day = day;
       material.userData.night = night;
@@ -229,36 +229,17 @@ export class DioramaView {
     this.lavaFlowPoints.frustumCulled = false;
     this.lavaFlowPoints.visible = false;
     this.scene.add(this.lavaFlowPoints);
-    // a fixed number of lights (changing the count would make the shaders rebuild)
-    this.glowLights = [];
-    for (let i = 0; i < 8; i++) {
-      const l = new THREE.PointLight(0xffc766, 0, 11, 1.6);
-      l.userData.base = 0;
-      this.scene.add(l);
-      this.glowLights.push(l);
-    }
   }
 
   rebuildGlow() {
     const w = this.world;
     const off = this.offset;
     const ptsById = new Map([...this.glowKinds.keys()].map((id) => [id, []]));
-    const buckets = new Map();
     for (let i = 0; i < w.cells.length; i++) {
-      const id = w.cells[i];
-      const pts = ptsById.get(id);
+      const pts = ptsById.get(w.cells[i]);
       if (!pts) continue;
       const [x, y, z] = w.coords(i);
-      const p = [x + 0.5 - off, y + 0.5, z + 0.5 - off];
-      pts.push(...p);
-      if (id !== 16) continue; // only glowstone also gets real lights
-      const k = `${Math.floor(x / 6)},${Math.floor(y / 6)},${Math.floor(z / 6)}`;
-      const b = buckets.get(k) || { n: 0, x: 0, y: 0, z: 0 };
-      b.n++;
-      b.x += p[0];
-      b.y += p[1];
-      b.z += p[2];
-      buckets.set(k, b);
+      pts.push(x + 0.5 - off, y + 0.5, z + 0.5 - off);
     }
     for (const [id, { points }] of this.glowKinds) {
       const pts = ptsById.get(id);
@@ -267,14 +248,6 @@ export class DioramaView {
       points.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
       points.visible = pts.length > 0;
     }
-    const top = [...buckets.values()].sort((a, b) => b.n - a.n).slice(0, this.glowLights.length);
-    this.glowLights.forEach((l, i) => {
-      const b = top[i];
-      if (b) {
-        l.position.set(b.x / b.n, b.y / b.n + 0.6, b.z / b.n);
-        l.userData.base = Math.min(2.2, 0.7 + 0.18 * b.n);
-      } else l.userData.base = 0;
-    });
     this.applyGlow();
     this.dirty = true;
   }
@@ -282,7 +255,6 @@ export class DioramaView {
   applyGlow() {
     const night = this.world.meta.sky === 'night';
     for (const { material } of this.glowKinds.values()) material.opacity = night ? material.userData.night : material.userData.day;
-    for (const l of this.glowLights) l.intensity = l.userData.base * (night ? 2.2 : 0.8);
     for (const mats of this.materials.values()) for (const m of mats) if (m.userData.glow) m.emissiveIntensity = m.userData.glow * (night ? 1.4 : 0.8);
   }
 
