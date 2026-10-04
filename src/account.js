@@ -30,6 +30,9 @@ export async function initAccount(ctx) {
     accountBtn.title = user ? 'Your dioramas and settings' : 'Sign in or create an account';
   }
   await refreshMe();
+  // keep the Reports button honest without a page refresh when you come back to the tab (no timer, so the database can still sleep)
+  const recheck = () => user && !document.hidden && refreshMe().catch(() => {});
+  document.addEventListener('visibilitychange', recheck);
 
   // ---------- panel helpers ----------
   function open(html, { wide = false, full = false } = {}) {
@@ -306,9 +309,12 @@ export async function initAccount(ctx) {
 
   // ---------- reviewing reports ----------
   async function reportsView() {
-    open('<h2>Reports</h2><p class="hint">Loading…</p>', { wide: true });
     try {
-      const { reports } = await api('GET', '/api/reports');
+      const { reports } = await api('GET', '/api/reports'); // no window until there is something to show
+      if (!reports.length) {
+        await refreshMe(); // someone else already dealt with it: just remove the button
+        return;
+      }
       const when = (iso) => new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
       const el = open(
         `<h2>Reports to review</h2>
@@ -357,6 +363,7 @@ export async function initAccount(ctx) {
     } catch (err) {
       ctx.toast(err.message);
       close();
+      await refreshMe().catch(() => {});
     }
   }
 
