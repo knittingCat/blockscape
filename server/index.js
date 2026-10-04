@@ -162,6 +162,9 @@ export function createApp() {
     res.json({ ok: true, hasGalleryCode: true });
   }));
 
+  // --- classes (helpers) ---
+  const isMember = async (userId, classId) => (await query(`SELECT 1 FROM ${T.members} WHERE class_id = $1 AND user_id = $2`, [classId, userId])).rowCount > 0;
+
   // --- dioramas ---
   const DATA_RE = /^[zr][A-Za-z0-9_-]+$/;
   app.post('/api/dioramas', needUser, wrap(async (req, res) => {
@@ -170,7 +173,12 @@ export function createApp() {
     if (!title || title.length > 80) return bad(res, 400, 'Give your diorama a title (up to 80 characters).');
     if (typeof data !== 'string' || data.length > 250000 || !DATA_RE.test(data)) return bad(res, 400, 'That diorama could not be saved.');
     if (thumb != null && (typeof thumb !== 'string' || thumb.length > 90000 || !thumb.startsWith('data:image/jpeg;base64,'))) return bad(res, 400, 'Bad picture.');
-    if (!['private', 'gallery'].includes(visibility)) return bad(res, 400, 'Choose private or gallery.');
+    if (!['private', 'gallery', 'class'].includes(visibility)) return bad(res, 400, 'Choose private, gallery or a class.');
+    let classId = null;
+    if (visibility === 'class') {
+      classId = Number(req.body.classId);
+      if (!Number.isInteger(classId) || !(await isMember(req.user.id, classId))) return bad(res, 400, 'Choose one of your classes.');
+    }
     const code = req.body.code;
     if (code != null && code !== '' && (typeof code !== 'string' || code.length < 3 || code.length > 40)) return bad(res, 400, 'A code is 3–40 characters.');
 
@@ -179,6 +187,8 @@ export function createApp() {
       if (!rows[0] || rows[0].owner_id !== req.user.id) return bad(res, 404, 'Diorama not found.');
       const sets = ['title = $1', 'data = $2', 'thumb = $3', 'visibility = $4', 'updated_at = NOW()'];
       const params = [title, data, thumb || null, visibility];
+      params.push(classId);
+      sets.push(`class_id = $${params.length}`);
       if (code === '' || code === null) sets.push('code_hash = NULL');
       else if (code !== undefined) {
         params.push(await hashSecret(code));
@@ -193,18 +203,18 @@ export function createApp() {
     if (cnt[0].n >= MAX_DIORAMAS_PER_USER) return bad(res, 400, `You can keep up to ${MAX_DIORAMAS_PER_USER} dioramas. Delete one first.`);
     const codeHash = code ? await hashSecret(code) : null;
     const { rows } = await query(
-      `INSERT INTO ${T.dioramas} (owner_id, title, data, thumb, visibility, code_hash) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [req.user.id, title, data, thumb || null, visibility, codeHash],
+      `INSERT INTO ${T.dioramas} (owner_id, title, data, thumb, visibility, code_hash, class_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [req.user.id, title, data, thumb || null, visibility, codeHash, classId],
     );
     res.json({ id: rows[0].id });
   }));
 
   app.get('/api/dioramas/mine', needUser, wrap(async (req, res) => {
     const { rows } = await query(
-      `SELECT id, title, thumb, visibility, (code_hash IS NOT NULL) AS has_code, updated_at FROM ${T.dioramas} WHERE owner_id = $1 ORDER BY updated_at DESC`,
+      `SELECT d.id, d.title, d.thumb, d.visibility, d.class_id, c.name AS class_name, (d.code_hash IS NOT NULL) AS has_code, d.updated_at FROM ${T.dioramas} d LEFT JOIN ${T.classes} c ON c.id = d.class_id WHERE d.owner_id = $1 ORDER BY d.updated_at DESC`,
       [req.user.id],
     );
-    res.json({ dioramas: rows.map((r) => ({ id: r.id, title: r.title, thumb: r.thumb, visibility: r.visibility, hasCode: r.has_code, updatedAt: r.updated_at })) });
+    res.json({ dioramas: rows.map((r) => ({ id: r.id, title: r.title, thumb: r.thumb, visibility: r.visibility, classId: r.class_id, className: r.class_name, hasCode: r.has_code, updatedAt: r.updated_at })) });
   }));
 
   const unlocked = async (userId, kind, target) =>
@@ -239,12 +249,14 @@ export function createApp() {
       const r = await query(`SELECT 1 FROM ${T.reports} WHERE diorama_id = $1 AND assigned_to = $2 AND status = 'open'`, [id, req.user.id]);
       reviewer = r.rowCount > 0;
     }
-    if (!mine && !req.user.is_admin && !reviewer) {
+    let classMember = false;
+    if (!mine && d.visibility === 'class' && d.class_id) classMember = await isMember(req.user.id, d.class_id);
+    if (!mine && !req.user.is_admin && !reviewer && !classMember) {
       if (d.visibility !== 'gallery') return bad(res, 404, 'Diorama not found.');
       if (d.gallery_hash && !(await unlocked(req.user.id, 'gallery', d.owner_id))) return bad(res, 403, 'This gallery needs a code.', { locked: 'gallery', ownerId: d.owner_id, owner: d.username });
       if (d.code_hash && !(await unlocked(req.user.id, 'diorama', d.id))) return bad(res, 403, 'This diorama needs a code.', { locked: 'diorama', id: d.id, owner: d.username });
     }
-    res.json({ id: d.id, title: d.title, data: d.data, owner: d.username, visibility: d.visibility, mine });
+    res.json({ id: d.id, title: d.title, data: d.data, owner: d.username, visibility: d.visibility, classId: d.class_id, mine });
   }));
 
   app.delete('/api/dioramas/:id', needUser, wrap(async (req, res) => {

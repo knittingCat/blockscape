@@ -59,6 +59,9 @@ export class World {
     this.fire = new Set(); // indices of cells whose block is on fire (the flames are part of the diorama and are saved)
     this.fireSpreading = false; // true while a fire is still spreading (not saved)
     this.fireBefore = null;
+    this.fireDestroy = false; // when true, burning wood, leaves, planks and wool burn away (not saved: chosen each time)
+    this.fireAge = new Map(); // how many steps each cell has been burning
+    this.fireCellChanges = [];
     this.meta = { sky: 'day', title: '', subtitle: '' };
     this.undoStack = [];
     this.redoStack = [];
@@ -370,6 +373,8 @@ export class World {
     if (this.fireSpreading) return;
     this.fireSpreading = true;
     this.fireBefore = [...this.fire];
+    this.fireCellChanges = [];
+    this.fireAge = new Map();
   }
   stopFire() {
     if (!this.fireSpreading) return false;
@@ -378,8 +383,10 @@ export class World {
     const after = [...this.fire];
     this.fireBefore = null;
     const same = before.length === after.length && before.every((i) => this.fire.has(i));
-    if (!same) {
-      this.undoStack.push({ fire: { before, after } });
+    const burnt = this.fireCellChanges;
+    this.fireCellChanges = [];
+    if (!same || burnt.length) {
+      this.undoStack.push({ fire: { before, after }, cells: burnt });
       this.redoStack.length = 0;
       if (this.undoStack.length > 200) this.undoStack.shift();
     }
@@ -403,10 +410,21 @@ export class World {
   // One step of spreading. Returns true while the fire can still spread to something.
   fireTick(rand = Math.random) {
     const add = [];
+    const burnt = [];
     let more = false;
     for (const i of this.fire) {
       if (!this.cells[i]) continue;
       const [x, y, z] = this.coords(i);
+      if (this.fireDestroy && this.isFlammable(this.cells[i])) {
+        // with "burn blocks away" on, wood, leaves, planks and wool are eventually used up
+        const age = (this.fireAge.get(i) || 0) + 1;
+        this.fireAge.set(i, age);
+        more = true;
+        if (age >= 5 && rand() < 0.5) {
+          burnt.push(i);
+          continue;
+        }
+      }
       for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0], [0, -1, 0]]) {
         const nx = x + dx;
         const ny = y + dy;
@@ -418,10 +436,22 @@ export class World {
         if (rand() < (dy === 1 ? 0.5 : dy === -1 ? 0.15 : 0.3)) add.push(ni); // fire climbs easily, rarely creeps down
       }
     }
+    if (burnt.length) {
+      const changes = [];
+      for (const i of burnt) {
+        changes.push({ i, from: this.cells[i], to: 0 });
+        this.cells[i] = 0;
+        this.fire.delete(i);
+        this.fireAge.delete(i);
+      }
+      this.settleSources(changes); // a water or lava source that was resting on burnt blocks drops
+      this.fireCellChanges.push(...changes);
+      this.emit({ type: 'cells', changes });
+    }
     if (add.length) {
       for (const ni of add) this.fire.add(ni);
-      this.emit({ type: 'fire' });
     }
+    if (add.length || burnt.length) this.emit({ type: 'fire' });
     return more;
   }
 

@@ -4,7 +4,7 @@ import pg from 'pg';
 // TABLE_PREFIX lets the automated tests use their own throw-away tables in the same database.
 export const PREFIX = process.env.TABLE_PREFIX || '';
 const t = (name) => `${PREFIX}${name}`;
-export const T = { users: t('users'), sessions: t('sessions'), dioramas: t('dioramas'), unlocks: t('unlocks'), reports: t('reports') };
+export const T = { users: t('users'), sessions: t('sessions'), dioramas: t('dioramas'), unlocks: t('unlocks'), reports: t('reports'), classes: t('classes'), members: t('class_members') };
 
 function connectionString() {
   const raw = process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL;
@@ -82,6 +82,25 @@ export async function initDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS ${t('reports_anon_once')} ON ${T.reports} (diorama_id, reporter_ip) WHERE reporter_id IS NULL;
   `);
 
+  // Class galleries: a class has an owner (the teacher) and members who joined with the class code. A diorama
+  // can be published to one class (visibility 'class'); only members can open it.
+  await query(`
+    CREATE TABLE IF NOT EXISTS ${T.classes} (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      owner_id INTEGER NOT NULL REFERENCES ${T.users}(id) ON DELETE CASCADE,
+      code TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS ${T.members} (
+      class_id INTEGER NOT NULL REFERENCES ${T.classes}(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES ${T.users}(id) ON DELETE CASCADE,
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (class_id, user_id)
+    );
+    ALTER TABLE ${T.dioramas} ADD COLUMN IF NOT EXISTS class_id INTEGER REFERENCES ${T.classes}(id) ON DELETE SET NULL;
+  `);
+
   // Case-insensitive uniqueness ("Ann" and "ann" are the same person). Not fatal if old data already clashes.
   try {
     await query(`CREATE UNIQUE INDEX IF NOT EXISTS ${t('users_username_lower')} ON ${T.users} (LOWER(username))`);
@@ -92,5 +111,5 @@ export async function initDb() {
 
 export async function dropAll() {
   if (!PREFIX) throw new Error('refusing to drop tables without TABLE_PREFIX');
-  await query(`DROP TABLE IF EXISTS ${T.reports}, ${T.unlocks}, ${T.dioramas}, ${T.sessions}, ${T.users} CASCADE`);
+  await query(`DROP TABLE IF EXISTS ${T.reports}, ${T.unlocks}, ${T.members}, ${T.dioramas}, ${T.classes}, ${T.sessions}, ${T.users} CASCADE`);
 }

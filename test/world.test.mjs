@@ -314,6 +314,37 @@ await test('fire: light a block, it spreads to flammable neighbours only, stop k
   assert.equal((await decodeWorld(await encodeWorld(w))).burningCells().length, 1);
 });
 
+await test('fire can burn blocks away (only when chosen); stone stays; one undo brings everything back', () => {
+  const mk = () => {
+    const w = new World(16);
+    w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+    w.setMany([[4, 1, 4, 12], [5, 1, 4, 12], [6, 1, 4, 3]], { record: false }); // planks, planks, stone
+    return w;
+  };
+  // off: nothing is destroyed, however long it burns
+  let w = mk();
+  w.setBurning(4, 1, 4, true);
+  for (let n = 0; n < 12; n++) w.fireTick(() => 0);
+  assert.equal(w.get(4, 1, 4), 12);
+  assert.equal(w.get(5, 1, 4), 12);
+  w.stopFire();
+  // on: planks burn away after a few steps, the stone beside them does not
+  w = mk();
+  w.fireDestroy = true;
+  w.setBurning(4, 1, 4, true);
+  let guard = 0;
+  while (w.fireTick(() => 0) && guard++ < 40);
+  assert.equal(w.get(4, 1, 4), 0);
+  assert.equal(w.get(5, 1, 4), 0);
+  assert.equal(w.get(6, 1, 4), 3); // stone is not flammable
+  assert.equal(w.burningCells().length, 0);
+  w.stopFire();
+  w.undo();
+  assert.equal(w.get(4, 1, 4), 12);
+  assert.equal(w.get(5, 1, 4), 12);
+  assert.equal(w.burningCells().length, 0); // the flames were not there before the session
+});
+
 await test('people: spin around is wrapped, head can turn a full way', () => {
   const c = cleanPerson({ x: 0, y: 0, z: 0, twist: 14, headTurn: 9 });
   assert.equal(c.twist, 2);

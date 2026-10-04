@@ -17,7 +17,7 @@ Live site: https://blockscape.onrender.com
 - Water and lava sources with nothing under them fall until they rest on something.
 
 **Fire**
-- The Fire tool lights a block; the flames spread to wood, leaves and wool next to it (nothing is destroyed). Press Stop spreading (or Esc) and the flames stay as part of the diorama, saved with it. Click a burning block to put it out.
+- The Fire tool lights a block; the flames spread to wood, leaves and wool next to it (nothing is destroyed unless you tick Burn blocks away, which uses up the wood, leaves, planks and wool that burn). Press Stop spreading (or Esc) and the flames stay as part of the diorama, saved with it. Click a burning block to put it out.
 
 **People**
 - Add a person, then change their skin, hair, hat, top, bottoms, shoes and name.

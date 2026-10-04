@@ -135,10 +135,10 @@ body.viewonly #fireBar { display: none !important; }
 
 /* starting-scene picker */
 #newDialog { width: min(560px, 94vw); }
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem; margin: .4rem 0 .8rem; }
-.cards .card { display: flex; flex-direction: column; align-items: center; gap: .35rem; padding: .5rem; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); cursor: pointer; font: inherit; }
-.cards .card img { width: 100%; max-width: 150px; aspect-ratio: 1; border-radius: 6px; object-fit: cover; }
-.cards .card[aria-checked="true"] { border-color: #6b82ff; background: #232846; }
+.tcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem; margin: .4rem 0 .8rem; }
+.tcards .card { display: flex; flex-direction: column; align-items: center; gap: .35rem; padding: .5rem; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); cursor: pointer; font: inherit; }
+.tcards .card img { width: 100%; max-width: 150px; aspect-ratio: 1; border-radius: 6px; object-fit: cover; }
+.tcards .card[aria-checked="true"] { border-color: #6b82ff; background: #232846; }
 
 /* ?clean (screenshots of the starting scenes): only the 3D view */
 body.clean #top, body.clean #palette, body.clean #status, body.clean #pasteBar, body.clean #banner, body.clean #toast { display: none !important; }

@@ -181,6 +181,7 @@ function setTool(t) {
   view?.showRegion(null, null);
   if (t !== 'paste') view?.showFootprint(null);
   $('#pasteBar').hidden = t !== 'paste';
+  updateFireBar();
   $$('[data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
   updateStatus();
   refreshHover();
@@ -556,7 +557,11 @@ function personAtCells(hit) {
 // ----- fire: spreads a little every 0.6 s until you stop it or it runs out of fuel -----
 let fireTimer = null;
 function updateFireBar() {
-  $('#fireBar').hidden = !(world && world.fireSpreading);
+  const spreading = !!(world && world.fireSpreading);
+  $('#fireBar').hidden = !(spreading || tool === 'fire');
+  $('#fireStop').hidden = !spreading;
+  $('#fireText').textContent = spreading ? 'Fire is spreading. Stop it to keep the flames as part of your diorama.' : 'Click a block to light it. Click a burning block to put it out.';
+  if (world) world.fireDestroy = $('#fireBurn').checked;
 }
 function stopFireNow(auto = false) {
   if (!world.fireSpreading) return;
@@ -1060,6 +1065,12 @@ function wireUI() {
 
   $('#lookDone').onclick = stopLooking;
   $('#fireStop').onclick = () => stopFireNow(false);
+  $('#fireBurn').checked = store.get('fire-burn') === '1';
+  $('#fireBurn').addEventListener('change', () => {
+    store.set('fire-burn', $('#fireBurn').checked ? '1' : '0');
+    updateFireBar();
+  });
+  updateFireBar();
   window.addEventListener('keydown', (e) => {
     if (view.looking) {
       if (e.key === 'Escape' || e.key === 'Enter') stopLooking();
