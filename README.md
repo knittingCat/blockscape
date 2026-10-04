@@ -1,45 +1,104 @@
 # Blockscape
 
-Build block dioramas in your browser — no install, no account. Place blocks, add text signs, switch between day, sunset and night, then **download a picture (PNG)** with a title bar or **copy a link** so others can walk around your scene.
+Build block dioramas in your browser. Place blocks, add people and signs, switch between day, sunset and night, then save a picture or share a link so others can look around your scene.
 
-Made for projects like "illustrate your favourite scene from a story".
+Made for school projects like "illustrate your favourite scene from a story": build the scene, post the picture or link on the class forum, and look at classmates' dioramas in a class gallery.
 
-## Using it
+Live site: https://blockscape.onrender.com
 
-- **Look around:** drag to rotate, scroll or pinch to zoom, right-drag (or two fingers) to move.
-- **Place a block:** pick one at the bottom, then click the ground or another block.
-- **Remove a block:** right-click it, or hold Shift and click.
-- **Tools:** Build · Erase · Box (click two corners to fill an area, Shift on the second click clears it) · Pick (copy a block) · Sign (floating text).
-- **Undo / redo:** Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z. The **Clear** (trash can) button removes everything you built but keeps the grass floor, and can be undone.
-- **Keys:** `1`–`9` pick blocks, `B` build, `P` place a block at the pointer, `M` mirror the copied structure, `Y` build symmetrically, `Q` rotate it, `E` erase, `X` box, `I` pick, `T` sign.
-- **Save / share:** Picture (PNG with an optional title and caption), Share link (the whole scene is inside the link), Save / Open (a `.blockscape` file). Your diorama also saves itself in the browser.
+## What you can do
 
-## Accounts and the class gallery
+**Build**
+- 28 blocks with pixel-art textures: grass, dirt, stone, cobblestone, sand, snow, ice, water, lava, wood, bricks, glass, glowstone, gold, obsidian and coloured wool.
+- Tools: Build, Erase, Box (fill an area), Select, Pick (copy a block's type), Sign (floating text), Person.
+- Copy and paste whole structures, with rotate and mirror. Build symmetrically across the left-right or front-back middle line.
+- Undo and redo for everything, including Clear, which removes only what you added and leaves the scene you started with.
+- Water and lava flow: sources fall through empty space and spread across surfaces, seeking nearby drops, and drain away when the source is removed. Flowing lava that meets water cools to cobblestone. The flow is worked out from the source blocks, so only the sources are saved.
+- Water and lava sources with nothing under them fall until they rest on something.
 
-When the site runs with its server (see below) three extra buttons appear:
+**People**
+- Add a person, then change their skin, hair, hat, top, bottoms, shoes and name.
+- Pose them standing or lying down, turn the whole person and the head separately, and move them.
+- Look through their eyes: drag to look around, and they turn to face the way you looked.
 
-- **Sign in / your name** — create an account with a username and password (no email, no real name). Shows *My dioramas* and your gallery settings.
-- **Save** — save the diorama to your account. The first time you choose a title, *Only me* or *In my gallery*, and optionally a **code** to open that diorama. After that, Save updates it, and changes also autosave a few seconds after you stop editing. (**Open file** loads a `.blockscape` file from your computer.)
-- **Gallery** — look at dioramas other signed-in people shared. A person can protect their whole gallery with a **gallery code**. While looking at someone else's diorama, **Report** sends it to the admin.
+**Share**
+- Picture: a PNG with an optional title and caption bar.
+- Share link: for a diorama saved to the gallery it copies a short link (`/#d=<id>`) that anyone can open without signing in. For anything else the whole scene is inside the link.
+- Save and Open a `.blockscape` file. The diorama also autosaves in the browser.
+- Anyone opening someone else's diorama sees it view-only, with a Report button.
 
-The live site is https://blockscape.onrender.com. If the files are ever served without the server (for example `python3 -m http.server`), these buttons stay hidden and everything else (building, pictures, share links, files) still works.
+**Accounts and the class gallery** (when the site runs with its server)
+- Sign in with a username and password. No email and no real name.
+- Save dioramas to your account as private or published to the gallery, optionally with a code to open a single diorama, or a code for your whole gallery.
+- Reports: a signed-in person can report a gallery diorama. Admins, or someone picked to review it, see a Reports button with a count of what is waiting, and can open the diorama, dismiss the report, hide the diorama from the gallery, or delete it. A report about an admin's diorama goes to a different admin, or to another member if there is no other admin. Nobody reviews a report they wrote or one about their own diorama. Reports nobody can be picked for stay open for the developer.
 
-### Reviewing reports
+## Controls
 
-A **Reports** button (flag icon) appears in the toolbar, with a red circle showing how many reports are waiting, only while there is a report waiting for you (admins, or someone picked to review one). When you have dealt with the last one, the window closes and the button disappears. For each report you can **Open** the diorama (view only), **Dismiss** the report, **Hide from gallery** (the owner keeps it, but it becomes private), or **Delete** it. A report about an *admin's* diorama is sent to a different admin; if there is no other admin it goes to a random other person, who then also gets the Reports button until they have dealt with it. If nobody else can be picked (for example the only other member is the one who reported it), the report stays unassigned and is left for Claude (the developer) to deal with; it appears in the Neon `reports` table with `assigned_to` empty and `status = 'open'`, and the owner never reviews a report about their own diorama. Nobody ever reviews a report they wrote. Only admins see who made a report.
+| Action | How |
+| --- | --- |
+| Look around | Drag to rotate, scroll or pinch to zoom, right-drag or two fingers to move |
+| Place a block | Pick one at the bottom, click the ground or a block. `P` places at the pointer |
+| Remove a block | Right-click, or Shift+click, or the Erase tool |
+| Tools | `B` build, `E` erase, `X` box, `S` select, `I` pick, `T` sign, `H` person |
+| Blocks | `1` to `9` pick the first nine blocks |
+| Copy and paste | Select an area (it copies), then `V` to paste, `Q` rotate, `M` mirror |
+| Symmetry | `Y` cycles off, left-right, front-back, both |
+| Undo and redo | Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z |
 
-### Admin tasks in Neon (the SQL way)
+## Run it
 
-Open the Neon SQL editor for the project:
+```bash
+npm install
+# .env (never commit it) holds the Neon pooled connection string:
+#   DATABASE_URL_POOLED="postgresql://...-pooler...neon.tech/neondb?sslmode=require"
+npm start            # http://localhost:3000
+```
+
+Tables are created automatically on start.
+
+To preview just the editor without the account server, run `python3 -m http.server 8000` and open http://localhost:8000. The account, gallery and report buttons stay hidden. Opening `index.html` straight from disk does not work, because browsers block ES modules on `file://`.
+
+## Deploy
+
+The repo includes a Render blueprint (`render.yaml`). Connect the repo on Render and add `DATABASE_URL_POOLED` as a secret environment variable. The server only touches the database when someone signs in or uses accounts, so a Neon database can scale to zero when nobody is around.
+
+## Tests
+
+```bash
+npm test
+```
+
+Runs the world logic tests and the account server tests. The server tests use throw-away `zz_test_` tables in the database from `.env` and drop them afterwards.
+
+## Project layout
+
+| Path | What it is |
+| --- | --- |
+| `src/world.js` | The voxel grid, undo history, ray casting, flowing liquid, people, and the save format (no DOM) |
+| `src/blocks.js`, `src/textures.js` | The block list and the pixel-art textures drawn with canvas |
+| `src/view.js` | The Three.js scene: lights, shadows, stand, signs, people, flowing liquid, camera |
+| `src/main.js` | Tools, palette, dialogs, picture export, sharing |
+| `src/clipboard.js` | Copy, paste, rotate, mirror and symmetry helpers |
+| `src/account.js`, `src/api.js` | Sign in, saving online, gallery, codes and reports (browser side) |
+| `server/` | Express server: accounts, sessions, saved dioramas, gallery, reports (Postgres on Neon) |
+| `test/` | World and server tests, plus a demo scene for screenshots |
+| `vendor/` | Three.js r186 and OrbitControls (MIT licence), vendored so the site works offline |
+
+## Maintaining the live site
+
+Admin tasks are done in the Neon SQL editor:
 
 ```sql
--- make someone an admin (admins can open and delete any diorama in the app)
+-- make someone an admin (admins can open, hide and delete any diorama in the app)
 UPDATE users SET is_admin = TRUE WHERE username = 'their_username';
 
--- see reports
+-- see open reports
 SELECT r.id, r.reason, r.created_at, d.id AS diorama_id, d.title, o.username AS owner, p.username AS reporter
-FROM reports r JOIN dioramas d ON d.id = r.diorama_id
-JOIN users o ON o.id = d.owner_id JOIN users p ON p.id = r.reporter_id
+FROM reports r
+JOIN dioramas d ON d.id = r.diorama_id
+JOIN users o ON o.id = d.owner_id
+JOIN users p ON p.id = r.reporter_id
+WHERE r.status = 'open'
 ORDER BY r.created_at DESC;
 
 -- remove a diorama (its reports go with it)
@@ -49,40 +108,8 @@ DELETE FROM dioramas WHERE id = 123;
 DELETE FROM users WHERE username = 'someone';
 ```
 
-There is no password reset (no email). A forgotten password means deleting the account and signing up again.
+There is no password reset, because accounts have no email. A forgotten password means deleting the account and signing up again.
 
-## Running the server
+## Licence
 
-```bash
-npm install
-# .env (never commit it) must contain the Neon pooled connection string:
-#   DATABASE_URL_POOLED="postgresql://...-pooler...neon.tech/neondb?sslmode=require"
-npm start                  # http://localhost:3000
-```
-
-Tables are created automatically on start. Deploying on Render: connect this repo, use `render.yaml`, and add `DATABASE_URL_POOLED` as a secret environment variable. The server never queries the database unless someone signs in or uses accounts, so Neon can scale to zero when nobody is around.
-
-Without a server you can still preview the editor: `python3 -m http.server 8000`. (Opening `index.html` straight from disk won't work, because browsers block ES modules on `file://`.)
-
-## Tests
-
-```bash
-npm test                      # world logic + the account server (uses throw-away zz_test_ tables in the database from .env)
-```
-
-## Layout
-
-| File | What it is |
-| --- | --- |
-| `src/world.js` | The voxel grid, undo history, ray casting and save format (no DOM) |
-| `src/blocks.js`, `src/textures.js` | The 28 blocks and their pixel-art textures (drawn with canvas) |
-| `src/view.js` | The Three.js scene: lights, shadows, stand, signs, camera |
-| `src/main.js` | Tools, palette, dialogs, picture export, sharing |
-| `src/account.js`, `src/api.js` | Sign in, save online, gallery, codes, reports (browser side) |
-| `server/` | Express server: accounts, sessions, saved dioramas, gallery, reports (Postgres on Neon) |
-| `vendor/` | Three.js r186 and OrbitControls (MIT licence), vendored so the site works offline |
-
-
-### Links to saved dioramas
-
-Share link on a diorama saved to the gallery (no code on it or on the owner's gallery) copies `/#d=<id>`. Anyone can open that without signing in (`GET /api/dioramas/:id/public`); private dioramas and ones behind a code are never served this way and fall back to the long scene link.
+Three.js and OrbitControls in `vendor/` are MIT licensed. Add your own licence for the rest of the code before sharing it widely.
