@@ -1072,13 +1072,6 @@ async function main() {
       }
     } catch {}
   }
-  // easter egg: once ever, at night, water and lava may spill off the stand into the void
-  view.voidOnce = !store.get('void-egg');
-  view.onVoid = () => {
-    store.set('void-egg', '1');
-    toast('Whoops — it spilled over the edge into the void.', 4500);
-  };
-  view.scheduleFlow();
   // ?cam=x,y,z,tx,ty,tz places the camera (used for test screenshots)
   const camParam = new URLSearchParams(location.search).get('cam');
   if (camParam) {

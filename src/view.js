@@ -197,7 +197,6 @@ export class DioramaView {
     this.stars.visible = s.stars;
     this.applyGlow();
     this.dirty = true;
-    if (this.flowMeshes) this.scheduleFlow(); // night mode can change how liquid flows
   }
 
   applyGlow() {
@@ -303,16 +302,7 @@ export class DioramaView {
   }
 
   rebuildFlow() {
-    let fresh;
-    const size = this.world.size;
-    // Easter egg: at night, once ever, liquid is allowed to spill off the stand into the void.
-    if (this.voidOnce && this.world.meta.sky === 'night') {
-      fresh = this.world.computeFlow(30000, { void: true });
-      if (fresh.some((c) => c.x < 0 || c.z < 0 || c.x >= size || c.z >= size)) {
-        this.voidOnce = false;
-        this.onVoid?.();
-      }
-    } else fresh = this.world.computeFlow();
+    const fresh = this.world.computeFlow();
     const STEP_TIME = { 9: 0.6, 10: 0.6, 4: 0.8 }; // seconds per step: lava and water spread, drain from the far end
     const key = (c) => `${c.id}:${c.x},${c.y},${c.z}`;
     const elapsed = (performance.now() - (this.flowStart || 0)) / 1000;

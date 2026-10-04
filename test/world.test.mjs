@@ -254,18 +254,6 @@ await test('a water source in the air falls until it rests; undo puts it back', 
   assert.equal(w.get(5, 1, 5), 3);
 });
 
-await test('night easter egg: with void on, liquid spills off the edge and falls away', () => {
-  const w = new World(16);
-  w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
-  w.setMany([[1, 1, 8, 9]], { record: false }); // water source 1 cell from the west edge
-  const normal = w.computeFlow();
-  assert.ok(normal.every((c) => c.x >= 0 && c.x < 16 && c.y >= 0)); // normally it stays on the stand
-  const spill = w.computeFlow(30000, { void: true });
-  assert.ok(spill.some((c) => c.x < 0), 'flows past the edge');
-  assert.ok(spill.some((c) => c.x < 0 && c.y < 0), 'and falls into the void');
-  assert.ok(spill.every((c) => c.y >= -16));
-});
-
 await test('Clear leaves the starting scene alone and removes only what was added', () => {
   const w = new World(16);
   w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });

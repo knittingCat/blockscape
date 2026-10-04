@@ -260,13 +260,10 @@ export class World {
   // Flow is worked out from the sources each time (nothing extra is saved). Where water and lava flows
   // meet, the cell turns to cobblestone. Returns [{ x, y, z, id, r, fall, step }] (r = reach left, step = how
   // many steps from the source, used to animate the spreading).
-  // With { void: true } (the night-mode easter egg) the stand has no edge: liquid spills over the side and falls
-  // away into the void (down to y = -16).
-  computeFlow(cap = 30000, { void: edge = false } = {}) {
-    const bottom = edge ? -16 : 0; // nothing flows below this level
+  computeFlow(cap = 30000) {
     const key = (x, y, z) => `${x},${y},${z}`;
-    const canFall = (x, y, z) => y > bottom && this.get(x, y - 1, z) === 0;
-    const canEnter = (x, y, z) => this.get(x, y, z) === 0 && (edge || this.inBounds(x, y, z));
+    const canFall = (x, y, z) => y > 0 && this.get(x, y - 1, z) === 0;
+    const canEnter = (x, y, z) => this.get(x, y, z) === 0 && this.inBounds(x, y, z);
     const result = new Map(); // fluid id -> Map(key -> cell)
     for (const [fid, R] of [[9, 7], [10, 3]]) {
       const best = new Map();
@@ -296,7 +293,7 @@ export class World {
           // like Minecraft: if a drop is within 4 cells, only flow toward the nearest one(s)
           const open = [];
           for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (canEnter(x + dx, y, z + dz)) open.push([dx, dz]);
-          const dists = open.map(([dx, dz]) => this.dropDistance(x, y, z, dx, dz, edge));
+          const dists = open.map(([dx, dz]) => this.dropDistance(x, y, z, dx, dz));
           const nearest = Math.min(...dists);
           open.forEach(([dx, dz], k) => {
             if (nearest <= 4 && dists[k] !== nearest) return;
@@ -329,19 +326,18 @@ export class World {
 
   // How many steps until a cell with nothing underneath, going first one step in (dx, dz) and then in any
   // direction over empty cells. Up to 4 steps are looked at; returns 99 when there is no drop that close.
-  dropDistance(x, y, z, dx, dz, edge = false) {
-    const bottom = edge ? -16 : 0;
+  dropDistance(x, y, z, dx, dz) {
     let frontier = [[x + dx, z + dz]];
     const seen = new Set([`${x},${z}`, `${x + dx},${z + dz}`]);
     for (let d = 1; d <= 4; d++) {
-      for (const [fx, fz] of frontier) if (y > bottom && this.get(fx, y - 1, fz) === 0) return d;
+      for (const [fx, fz] of frontier) if (y > 0 && this.get(fx, y - 1, fz) === 0) return d;
       const next = [];
       for (const [fx, fz] of frontier) {
         for (const [ex, ez] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const nx = fx + ex;
           const nz = fz + ez;
           const k = `${nx},${nz}`;
-          if (seen.has(k) || this.get(nx, y, nz) !== 0 || !(edge || this.inBounds(nx, y, nz))) continue;
+          if (seen.has(k) || this.get(nx, y, nz) !== 0 || !this.inBounds(nx, y, nz)) continue;
           seen.add(k);
           next.push([nx, nz]);
         }
