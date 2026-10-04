@@ -165,19 +165,163 @@ export function createApp() {
   // --- classes (helpers) ---
   const isMember = async (userId, classId) => (await query(`SELECT 1 FROM ${T.members} WHERE class_id = $1 AND user_id = $2`, [classId, userId])).rowCount > 0;
 
+  // --- class galleries ---
+  const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no look-alike letters or digits
+  const newClassCode = () => Array.from({ length: 6 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
+  const MAX_CLASSES_OWNED = 5;
+  const classCard = (r) => ({ id: r.id, title: r.title, owner: r.username, thumb: r.thumb, locked: false, updatedAt: r.updated_at });
+  // Returns the class (with isOwner) for a member, or sends the error and returns null.
+  const needClassMember = async (req, res) => {
+    const stop = (status, msg) => {
+      bad(res, status, msg);
+      return null;
+    };
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return stop(404, 'Class not found.');
+    const { rows } = await query(`SELECT c.*, u.username AS owner FROM ${T.classes} c JOIN ${T.users} u ON u.id = c.owner_id WHERE c.id = $1`, [id]);
+    const c = rows[0];
+    if (!c) return stop(404, 'Class not found.');
+    const member = await isMember(req.user.id, id);
+    if (!member && !req.user.is_admin) return stop(404, 'Class not found.');
+    return { ...c, isOwner: c.owner_id === req.user.id };
+  };
+
+  app.get('/api/classes', needUser, wrap(async (req, res) => {
+    const { rows } = await query(
+      `SELECT c.id, c.name, c.owner_id, c.code, u.username AS owner, (SELECT COUNT(*)::int FROM ${T.members} m2 WHERE m2.class_id = c.id) AS n
+       FROM ${T.classes} c JOIN ${T.members} m ON m.class_id = c.id AND m.user_id = $1 JOIN ${T.users} u ON u.id = c.owner_id ORDER BY c.name`,
+      [req.user.id],
+    );
+    res.json({ classes: rows.map((c) => ({ id: c.id, name: c.name, owner: c.owner, isOwner: c.owner_id === req.user.id, code: c.owner_id === req.user.id ? c.code : null, members: c.n })) });
+  }));
+
+  app.post('/api/classes', needUser, rateLimiter({ windowMs: 3600e3, max: 20 }), wrap(async (req, res) => {
+    const name = String(req.body.name || '').trim();
+    if (!name || name.length > 60) return bad(res, 400, 'Give the class a name (up to 60 characters).');
+    const { rows: owned } = await query(`SELECT COUNT(*)::int AS n FROM ${T.classes} WHERE owner_id = $1`, [req.user.id]);
+    if (owned[0].n >= MAX_CLASSES_OWNED) return bad(res, 400, `You can run up to ${MAX_CLASSES_OWNED} classes.`);
+    let created = null;
+    for (let tries = 0; tries < 8 && !created; tries++) {
+      try {
+        created = (await query(`INSERT INTO ${T.classes} (name, owner_id, code) VALUES ($1,$2,$3) RETURNING id, code`, [name, req.user.id, newClassCode()])).rows[0];
+      } catch (e) {
+        if (e.code !== '23505') throw e; // that code was taken: try another
+      }
+    }
+    if (!created) return bad(res, 500, 'Could not make a class code. Please try again.');
+    await query(`INSERT INTO ${T.members} (class_id, user_id) VALUES ($1,$2)`, [created.id, req.user.id]);
+    res.json({ id: created.id, name, code: created.code });
+  }));
+
+  app.post('/api/classes/join', needUser, rateLimiter({ windowMs: 600e3, max: 20 }), wrap(async (req, res) => {
+    const code = String(req.body.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length < 4) return bad(res, 400, 'Type the class code your teacher gave you.');
+    const { rows } = await query(`SELECT id, name FROM ${T.classes} WHERE code = $1`, [code]);
+    if (!rows[0]) return bad(res, 404, 'No class has that code. Check it and try again.');
+    await query(`INSERT INTO ${T.members} (class_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [rows[0].id, req.user.id]);
+    res.json({ id: rows[0].id, name: rows[0].name });
+  }));
+
+  app.get('/api/classes/:id', needUser, wrap(async (req, res) => {
+    const c = await needClassMember(req, res);
+    if (!c) return;
+    const manage = c.isOwner || req.user.is_admin;
+    const members = await query(`SELECT u.username, (u.id = $2) AS is_owner FROM ${T.members} m JOIN ${T.users} u ON u.id = m.user_id WHERE m.class_id = $1 ORDER BY u.username`, [c.id, c.owner_id]);
+    const dioramas = await query(
+      `SELECT d.id, d.title, d.thumb, d.updated_at, u.username FROM ${T.dioramas} d JOIN ${T.users} u ON u.id = d.owner_id WHERE d.class_id = $1 AND d.visibility = 'class' ORDER BY d.updated_at DESC`,
+      [c.id],
+    );
+    res.json({
+      id: c.id,
+      name: c.name,
+      owner: c.owner,
+      isOwner: c.isOwner,
+      manage,
+      code: manage ? c.code : null,
+      members: members.rows.map((m) => ({ username: m.username, isOwner: m.is_owner })),
+      dioramas: dioramas.rows.map(classCard),
+    });
+  }));
+
+  // leaving, being removed or deleting a class takes that person's dioramas out of it (they keep them, privately)
+  const pullOut = (classId, userId) =>
+    query(`UPDATE ${T.dioramas} SET visibility = 'private', class_id = NULL WHERE class_id = $1 AND ($2::int IS NULL OR owner_id = $2)`, [classId, userId]);
+
+  app.post('/api/classes/:id/leave', needUser, wrap(async (req, res) => {
+    const c = await needClassMember(req, res);
+    if (!c) return;
+    if (c.isOwner) return bad(res, 400, 'You run this class. Delete it instead.');
+    await query(`DELETE FROM ${T.members} WHERE class_id = $1 AND user_id = $2`, [c.id, req.user.id]);
+    await pullOut(c.id, req.user.id);
+    res.json({ ok: true });
+  }));
+
+  app.delete('/api/classes/:id', needUser, wrap(async (req, res) => {
+    const c = await needClassMember(req, res);
+    if (!c) return;
+    if (!c.isOwner && !req.user.is_admin) return bad(res, 403, 'Only the person who runs the class can delete it.');
+    await pullOut(c.id, null);
+    await query(`DELETE FROM ${T.classes} WHERE id = $1`, [c.id]);
+    res.json({ ok: true });
+  }));
+
+  app.post('/api/classes/:id/code', needUser, wrap(async (req, res) => {
+    const c = await needClassMember(req, res);
+    if (!c) return;
+    if (!c.isOwner && !req.user.is_admin) return bad(res, 403, 'Only the person who runs the class can change the code.');
+    for (let tries = 0; tries < 8; tries++) {
+      try {
+        const code = newClassCode();
+        await query(`UPDATE ${T.classes} SET code = $1 WHERE id = $2`, [code, c.id]);
+        return res.json({ code });
+      } catch (e) {
+        if (e.code !== '23505') throw e;
+      }
+    }
+    return bad(res, 500, 'Could not make a new code. Please try again.');
+  }));
+
+  app.post('/api/classes/:id/remove', needUser, wrap(async (req, res) => {
+    const c = await needClassMember(req, res);
+    if (!c) return;
+    if (!c.isOwner && !req.user.is_admin) return bad(res, 403, 'Only the person who runs the class can remove people.');
+    const { rows } = await query(`SELECT id FROM ${T.users} WHERE LOWER(username) = LOWER($1)`, [String(req.body.username || '')]);
+    if (!rows[0] || rows[0].id === c.owner_id) return bad(res, 400, 'That person cannot be removed.');
+    await query(`DELETE FROM ${T.members} WHERE class_id = $1 AND user_id = $2`, [c.id, rows[0].id]);
+    await pullOut(c.id, rows[0].id);
+    res.json({ ok: true });
+  }));
+
+  app.post('/api/classes/:id/takedown', needUser, wrap(async (req, res) => {
+    const c = await needClassMember(req, res);
+    if (!c) return;
+    if (!c.isOwner && !req.user.is_admin) return bad(res, 403, 'Only the person who runs the class can take a diorama down.');
+    await query(`UPDATE ${T.dioramas} SET visibility = 'private', class_id = NULL WHERE id = $1 AND class_id = $2`, [Number(req.body.dioramaId), c.id]);
+    res.json({ ok: true });
+  }));
+
   // --- dioramas ---
   const DATA_RE = /^[zr][A-Za-z0-9_-]+$/;
   app.post('/api/dioramas', needUser, wrap(async (req, res) => {
-    const { id, data, thumb, visibility } = req.body;
+    const { id, data, thumb } = req.body;
+    let { visibility } = req.body;
     const title = String(req.body.title || '').trim();
     if (!title || title.length > 80) return bad(res, 400, 'Give your diorama a title (up to 80 characters).');
     if (typeof data !== 'string' || data.length > 250000 || !DATA_RE.test(data)) return bad(res, 400, 'That diorama could not be saved.');
     if (thumb != null && (typeof thumb !== 'string' || thumb.length > 90000 || !thumb.startsWith('data:image/jpeg;base64,'))) return bad(res, 400, 'Bad picture.');
-    if (!['private', 'gallery', 'class'].includes(visibility)) return bad(res, 400, 'Choose private, gallery or a class.');
     let classId = null;
-    if (visibility === 'class') {
-      classId = Number(req.body.classId);
-      if (!Number.isInteger(classId) || !(await isMember(req.user.id, classId))) return bad(res, 400, 'Choose one of your classes.');
+    if (id != null && req.body.explicit !== true) {
+      // autosave: keep whoever it is shared with (a teacher may have taken it down, or the author left the class)
+      const { rows: cur } = await query(`SELECT owner_id, visibility, class_id FROM ${T.dioramas} WHERE id = $1`, [id]);
+      if (!cur[0] || cur[0].owner_id !== req.user.id) return bad(res, 404, 'Diorama not found.');
+      visibility = cur[0].visibility;
+      classId = cur[0].class_id;
+    } else {
+      if (!['private', 'gallery', 'class'].includes(visibility)) return bad(res, 400, 'Choose private, gallery or a class.');
+      if (visibility === 'class') {
+        classId = Number(req.body.classId);
+        if (!Number.isInteger(classId) || !(await isMember(req.user.id, classId))) return bad(res, 400, 'Choose one of your classes.');
+      }
     }
     const code = req.body.code;
     if (code != null && code !== '' && (typeof code !== 'string' || code.length < 3 || code.length > 40)) return bad(res, 400, 'A code is 3–40 characters.');
@@ -331,15 +475,22 @@ export function createApp() {
     const reason = String(req.body.reason || '').trim().slice(0, 300);
     if (!Number.isInteger(id) || !reason) return bad(res, 400, 'Tell us briefly what is wrong.');
     const { rows } = await query(
-      `SELECT d.owner_id, u.is_admin AS owner_admin FROM ${T.dioramas} d JOIN ${T.users} u ON u.id = d.owner_id WHERE d.id = $1 AND d.visibility = 'gallery'`,
+      `SELECT d.owner_id, d.visibility, d.class_id, u.is_admin AS owner_admin FROM ${T.dioramas} d JOIN ${T.users} u ON u.id = d.owner_id WHERE d.id = $1 AND d.visibility IN ('gallery', 'class')`,
       [id],
     );
     if (!rows[0]) return bad(res, 404, 'Diorama not found.');
+    let classOwner = null;
+    if (rows[0].visibility === 'class') {
+      // a diorama shared with a class can only be reported by someone in that class; the teacher reviews it
+      if (!req.user || !(await isMember(req.user.id, rows[0].class_id))) return bad(res, 404, 'Diorama not found.');
+      classOwner = (await query(`SELECT owner_id FROM ${T.classes} WHERE id = $1`, [rows[0].class_id])).rows[0]?.owner_id ?? null;
+    }
     const me = req.user ? req.user.id : 0; // 0 = not signed in (no user has id 0)
     if (rows[0].owner_id === me) return bad(res, 400, 'That is your own diorama.');
     // A report about an admin's diorama goes to a different admin; if there is none, to a random other person.
     let assignedTo = null;
-    if (rows[0].owner_admin) {
+    if (classOwner && classOwner !== rows[0].owner_id && classOwner !== me) assignedTo = classOwner;
+    else if (rows[0].owner_admin) {
       const admin = await query(`SELECT id FROM ${T.users} WHERE is_admin = TRUE AND id <> $1 AND id <> $2 ORDER BY random() LIMIT 1`, [rows[0].owner_id, me]);
       if (admin.rows[0]) assignedTo = admin.rows[0].id;
       else {

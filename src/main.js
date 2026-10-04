@@ -267,7 +267,7 @@ async function doCloudSave() {
       title: c.title,
       data: await encodeWorld(world),
       thumb: view.snapshot(320, 200).toDataURL('image/jpeg', 0.72),
-      visibility: c.visibility || 'private',
+      visibility: c.visibility || 'private', // the server keeps the current sharing for autosaves
     });
     setCloudState(cloud === c ? 'Saved' : '');
     return true;

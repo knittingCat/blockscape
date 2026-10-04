@@ -322,6 +322,66 @@ try {
     assert.equal((await ben.call('GET', '/api/reports')).json.reports.length, 0); // non-admins see nothing
   });
 
+  await test('class galleries: create, join with the code, share to a class, members only, teacher reviews and takes down', async () => {
+    const made = await ann.call('POST', '/api/classes', { name: 'Period 3 English' });
+    assert.equal(made.status, 200);
+    assert.match(made.json.code, /^[A-Z0-9]{6}$/);
+    assert.equal((await ann.call('POST', '/api/classes', { name: '' })).status, 400);
+    // joining
+    assert.equal((await ben.call('POST', '/api/classes/join', { code: 'NOPE99' })).status, 404);
+    const joined = await ben.call('POST', '/api/classes/join', { code: ' ' + made.json.code.toLowerCase().slice(0, 3) + '-' + made.json.code.toLowerCase().slice(3) });
+    assert.equal(joined.status, 200);
+    assert.equal(joined.json.id, made.json.id);
+    // only members can look
+    const classId = made.json.id;
+    assert.equal((await cat.call('GET', `/api/classes/${classId}`)).status, 404);
+    const view = await ben.call('GET', `/api/classes/${classId}`);
+    assert.equal(view.status, 200);
+    assert.equal(view.json.code, null); // only the owner sees the code
+    assert.deepEqual(view.json.members.map((m) => m.username).sort(), ['Ann', 'ben'].sort().map((n) => view.json.members.find((m) => m.username.toLowerCase() === n.toLowerCase()).username));
+    assert.equal((await ann.call('GET', `/api/classes/${classId}`)).json.code, made.json.code);
+    assert.equal((await ben.call('GET', '/api/classes')).json.classes.length, 1);
+    // sharing: you must be in the class
+    assert.equal((await cat.call('POST', '/api/dioramas', { title: 'Nope', data: DATA, visibility: 'class', classId })).status, 400);
+    assert.equal((await ben.call('POST', '/api/dioramas', { title: 'Nope', data: DATA, visibility: 'class' })).status, 400);
+    const shared = await ben.call('POST', '/api/dioramas', { title: 'Class project', data: DATA, visibility: 'class', classId });
+    assert.equal(shared.status, 200);
+    assert.equal((await cat.call('GET', `/api/dioramas/${shared.json.id}`)).status, 404); // not in the class
+    assert.equal((await ann.call('GET', `/api/dioramas/${shared.json.id}`)).status, 200); // teacher
+    assert.equal((await new Client().call('GET', `/api/dioramas/${shared.json.id}/public`)).status, 404); // never a public link
+    assert.equal((await ann.call('GET', `/api/classes/${classId}`)).json.dioramas.length, 1);
+    assert.equal((await cat.call('GET', '/api/gallery')).json.recent.some((d) => d.id === shared.json.id), false); // not in the everyone gallery
+    // reporting goes to the teacher, and only class members can report it
+    assert.equal((await cat.call('POST', '/api/report', { dioramaId: shared.json.id, reason: 'x' })).status, 404);
+    assert.equal((await ann.call('POST', '/api/report', { dioramaId: shared.json.id, reason: 'Not okay' })).status, 200);
+    const { rows } = await query(`SELECT assigned_to FROM ${T.reports} WHERE diorama_id = $1`, [shared.json.id]);
+    assert.equal(rows.length, 1);
+    // (Ann is the teacher, so her own report is not assigned to herself)
+    assert.equal(rows[0].assigned_to, null);
+    // only the teacher manages
+    assert.equal((await ben.call('POST', `/api/classes/${classId}/takedown`, { dioramaId: shared.json.id })).status, 403);
+    assert.equal((await ben.call('POST', `/api/classes/${classId}/code`, {})).status, 403);
+    const newCode = await ann.call('POST', `/api/classes/${classId}/code`, {});
+    assert.notEqual(newCode.json.code, made.json.code);
+    assert.equal((await ann.call('POST', `/api/classes/${classId}/takedown`, { dioramaId: shared.json.id })).status, 200);
+    assert.equal((await ann.call('GET', `/api/classes/${classId}`)).json.dioramas.length, 0);
+    assert.equal((await ben.call('GET', `/api/dioramas/${shared.json.id}`)).json.visibility, 'private'); // still Ben's
+    // autosave (no `explicit`) never re-shares a diorama the teacher took down
+    assert.equal((await ben.call('POST', '/api/dioramas', { id: shared.json.id, title: 'Class project', data: DATA, visibility: 'class', classId })).status, 200);
+    assert.equal((await ann.call('GET', `/api/classes/${classId}`)).json.dioramas.length, 0);
+    assert.equal((await ben.call('GET', `/api/dioramas/${shared.json.id}`)).json.visibility, 'private');
+    // but choosing it again in the Save window (explicit) does
+    assert.equal((await ben.call('POST', '/api/dioramas', { id: shared.json.id, title: 'Class project', data: DATA, visibility: 'class', classId, explicit: true })).status, 200);
+    assert.equal((await ann.call('GET', `/api/classes/${classId}`)).json.dioramas.length, 1);
+    // leaving, and deleting the class
+    assert.equal((await ann.call('POST', `/api/classes/${classId}/leave`, {})).status, 400); // the teacher cannot leave
+    assert.equal((await ben.call('POST', `/api/classes/${classId}/leave`, {})).status, 200);
+    assert.equal((await ben.call('GET', `/api/classes/${classId}`)).status, 404);
+    assert.equal((await ben.call('DELETE', `/api/classes/${classId}`)).status, 404);
+    assert.equal((await ann.call('DELETE', `/api/classes/${classId}`)).status, 200);
+    assert.equal((await ann.call('GET', '/api/classes')).json.classes.length, 0);
+  });
+
   await test('brute-force protection on login', async () => {
     const attacker = new Client();
     let last;

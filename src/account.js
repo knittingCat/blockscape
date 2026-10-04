@@ -96,18 +96,22 @@ export async function initAccount(ctx) {
   const needSignIn = (message, after) => authView({ mode: 'login', message, after });
 
   // ---------- save online ----------
-  function saveView() {
+  async function saveView() {
     const world = ctx.getWorld();
     const cloud = ctx.getCloud();
     const updating = cloud && cloud.mine;
+    const { classes } = await api('GET', '/api/classes').catch(() => ({ classes: [] }));
+    const inClass = updating && cloud.visibility === 'class';
     const el = open(`
       <h2>${updating ? 'Save changes' : 'Save to your account'}</h2>
       <form id="saveForm">
         <label>Title <input name="title" maxlength="80" required value="${esc(updating ? cloud.title : world.meta.title || '')}" placeholder="e.g. Chapter 3: The Little House"></label>
         <fieldset>
           <legend>Who can see it?</legend>
-          <label class="inline"><input type="radio" name="vis" value="private" ${updating && cloud.visibility === 'gallery' ? '' : 'checked'}> Only me</label>
-          <label class="inline"><input type="radio" name="vis" value="gallery" ${updating && cloud.visibility === 'gallery' ? 'checked' : ''}> In my gallery (other signed-in users can look)</label>
+          <label class="inline"><input type="radio" name="vis" value="private" ${updating && (cloud.visibility === 'gallery' || inClass) ? '' : 'checked'}> Only me</label>
+          <label class="inline"><input type="radio" name="vis" value="gallery" ${updating && cloud.visibility === 'gallery' ? 'checked' : ''}> In my gallery (everyone signed in can look)</label>
+          ${classes.length ? `<label class="inline"><input type="radio" name="vis" value="class" ${inClass ? 'checked' : ''}> In a class gallery (only that class can look):
+            <select name="classId">${classes.map((c) => `<option value="${c.id}" ${inClass && cloud.classId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : ''}
         </fieldset>
         <label>Optional: a code people must enter to open this diorama
           <input name="code" maxlength="40" autocomplete="off" placeholder="${updating && cloud.hasCode ? 'Leave blank to keep the current code' : 'Leave blank for no code'}">
@@ -132,6 +136,8 @@ export async function initAccount(ctx) {
         data: await encodeWorld(world),
         thumb: ctx.makeThumb(),
         visibility: f.get('vis'),
+        explicit: true, // choosing who can see it (autosave never changes that)
+        classId: f.get('vis') === 'class' ? Number(f.get('classId')) : undefined,
       };
       if (code) payload.code = code;
       else if (f.get('clearCode')) payload.code = '';
@@ -139,8 +145,8 @@ export async function initAccount(ctx) {
       try {
         const res = await api('POST', '/api/dioramas', payload);
         world.meta.title = payload.title;
-        ctx.setCloud({ id: res.id, title: payload.title, mine: true, visibility: payload.visibility, hasCode: !!code || (updating && cloud.hasCode && !f.get('clearCode')) });
-        ctx.toast(payload.visibility === 'gallery' ? 'Saved — it is in your gallery.' : 'Saved to your account.');
+        ctx.setCloud({ id: res.id, title: payload.title, mine: true, visibility: payload.visibility, classId: payload.classId, hasCode: !!code || (updating && cloud.hasCode && !f.get('clearCode')) });
+        ctx.toast(payload.visibility === 'gallery' ? 'Saved — it is in your gallery.' : payload.visibility === 'class' ? 'Saved — shared with your class.' : 'Saved to your account.');
         close();
       } catch (err) {
         for (const b of el.querySelectorAll('button')) b.disabled = false;
@@ -184,15 +190,15 @@ export async function initAccount(ctx) {
     };
   }
 
-  const cards = (items, { mine = false } = {}) =>
+  const cards = (items, { mine = false, takedown = false } = {}) =>
     items.length
       ? `<div class="cards">${items
           .map(
             (d) => `<div class="dcard">
               <button class="dthumb" data-open="${d.id}" title="Open">${d.thumb ? `<img src="${esc(d.thumb)}" alt="">` : `<span>${d.locked ? 'Locked' : 'No picture'}</span>`}</button>
               <div class="dtitle">${d.locked ? '[Locked] ' : ''}${esc(d.title)}</div>
-              <div class="dmeta">${mine ? (d.visibility === 'gallery' ? 'In my gallery' : 'Only me') + (d.hasCode ? ' · needs a code' : '') : `by <button class="link" data-user="${esc(d.owner)}">${esc(d.owner)}</button>`}</div>
-              ${mine ? `<div class="dactions"><button data-open="${d.id}">Open</button><button data-del="${d.id}">Delete</button></div>` : ''}
+              <div class="dmeta">${mine ? (d.visibility === 'gallery' ? 'In my gallery' : d.visibility === 'class' ? 'Class: ' + esc(d.className || '') : 'Only me') + (d.hasCode ? ' · needs a code' : '') : `by <button class="link" data-user="${esc(d.owner)}">${esc(d.owner)}</button>`}</div>
+              ${mine ? `<div class="dactions"><button data-open="${d.id}">Open</button><button data-del="${d.id}">Delete</button></div>` : takedown ? `<div class="dactions"><button data-takedown="${d.id}">Take down</button></div>` : ''}
             </div>`,
           )
           .join('')}</div>`
@@ -273,9 +279,18 @@ export async function initAccount(ctx) {
     open('<h2>Gallery</h2><p class="hint">Loading…</p>', { wide: true });
     try {
       const g = await api('GET', '/api/gallery');
+      const { classes } = await api('GET', '/api/classes');
       const el = open(
         `<h2>Gallery</h2>
         <p class="hint">Dioramas other people chose to share. Be kind — use Report if something isn't okay.</p>
+        <h3>My classes</h3>
+        <div class="chips">${classes.length ? classes.map((c) => `<button class="chip" data-class="${c.id}">${esc(c.name)} <small>${c.members}</small></button>`).join('') : '<span class="hint">You are not in a class yet.</span>'}</div>
+        <form id="joinForm" class="inlineform">
+          <input name="code" maxlength="12" autocomplete="off" placeholder="Class code">
+          <button class="primary">Join a class</button>
+          <button type="button" data-act="newclass">Start a class</button>
+        </form>
+        <p class="error" id="classError" hidden></p>
         <h3>People</h3>
         <div class="chips">${g.members.length ? g.members.map((m) => `<button class="chip" data-user="${esc(m.username)}">${m.locked ? '[Locked] ' : ''}${esc(m.username)} <small>${m.count}</small></button>`).join('') : '<span class="hint">No one has shared anything yet.</span>'}</div>
         <h3>Newest</h3>
@@ -284,10 +299,92 @@ export async function initAccount(ctx) {
         { wide: true },
       );
       wireCards(el);
+      el.querySelectorAll('[data-class]').forEach((b) => (b.onclick = () => classView(Number(b.dataset.class))));
+      $('#joinForm', el).onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+          const joined = await api('POST', '/api/classes/join', { code: new FormData(e.target).get('code') });
+          ctx.toast(`You joined ${joined.name}.`);
+          classView(joined.id);
+        } catch (err) {
+          fail($('#classError', el), err);
+        }
+      };
+      $('[data-act=newclass]', el).onclick = async () => {
+        const name = (prompt('What is the class called? (for example: Period 3 English)') || '').trim();
+        if (!name) return;
+        try {
+          const made = await api('POST', '/api/classes', { name });
+          ctx.toast(`Class started. Share the code ${made.code} with your students.`);
+          classView(made.id);
+        } catch (err) {
+          fail($('#classError', el), err);
+        }
+      };
       $('[data-act=close]', el).onclick = close;
     } catch (err) {
       ctx.toast(err.message);
       close();
+    }
+  }
+
+  // ---------- a class gallery ----------
+  async function classView(id) {
+    try {
+      const c = await api('GET', `/api/classes/${id}`);
+      const el = open(
+        `<h2>${esc(c.name)}</h2>
+        <p class="hint">Run by ${esc(c.owner)}. Only people in this class can see what is shared here.</p>
+        ${c.manage ? `<p>Class code: <b class="code">${esc(c.code)}</b> <button type="button" data-act="newcode">New code</button><br><small class="hint">Give this code to your students (Gallery, then Join a class).</small></p>` : ''}
+        ${cards(c.dioramas, { takedown: c.manage })}
+        <h3>People <small>${c.members.length}</small></h3>
+        <div class="chips">${c.members.map((m) => `<span class="chip">${esc(m.username)}${m.isOwner ? ' (teacher)' : ''}${c.manage && !m.isOwner ? ` <button class="link" data-remove="${esc(m.username)}" title="Remove from the class">remove</button>` : ''}</span>`).join('')}</div>
+        <p class="error" id="classError" hidden></p>
+        <div class="row"><button type="button" data-act="back">← Gallery</button>${c.isOwner ? '<button type="button" data-act="delete">Delete class</button>' : '<button type="button" data-act="leave">Leave class</button>'}<button type="button" class="primary" data-act="close">Close</button></div>`,
+        { wide: true },
+      );
+      wireCards(el);
+      const run = (fn) => async () => {
+        try {
+          await fn();
+        } catch (err) {
+          fail($('#classError', el), err);
+        }
+      };
+      el.querySelectorAll('[data-takedown]').forEach((b) => (b.onclick = run(async () => {
+        if (!confirm('Take this diorama out of the class? The author keeps it (only they can see it).')) return;
+        await api('POST', `/api/classes/${id}/takedown`, { dioramaId: Number(b.dataset.takedown) });
+        classView(id);
+      })));
+      el.querySelectorAll('[data-remove]').forEach((b) => (b.onclick = run(async () => {
+        if (!confirm(`Remove ${b.dataset.remove} from the class? Their dioramas leave the class but they keep them.`)) return;
+        await api('POST', `/api/classes/${id}/remove`, { username: b.dataset.remove });
+        classView(id);
+      })));
+      const newCode = $('[data-act=newcode]', el);
+      if (newCode) newCode.onclick = run(async () => {
+        if (!confirm('Make a new code? The old code stops working for new students (people already in the class stay).')) return;
+        await api('POST', `/api/classes/${id}/code`, {});
+        classView(id);
+      });
+      const del = $('[data-act=delete]', el);
+      if (del) del.onclick = run(async () => {
+        if (!confirm('Delete this class? Everyone is removed and the dioramas shared to it go back to being private. This cannot be undone.')) return;
+        await api('DELETE', `/api/classes/${id}`);
+        ctx.toast('Class deleted.');
+        galleryView();
+      });
+      const leave = $('[data-act=leave]', el);
+      if (leave) leave.onclick = run(async () => {
+        if (!confirm('Leave this class? Your dioramas in it will go back to being private.')) return;
+        await api('POST', `/api/classes/${id}/leave`, {});
+        ctx.toast('You left the class.');
+        galleryView();
+      });
+      $('[data-act=back]', el).onclick = galleryView;
+      $('[data-act=close]', el).onclick = close;
+    } catch (err) {
+      ctx.toast(err.message);
     }
   }
 
