@@ -202,32 +202,19 @@ export class DioramaView {
 
   // ----- glowstone glow: a soft halo around every glowstone block, plus a few real lights that brighten what is nearby -----
   initGlow() {
-    const c = document.createElement('canvas');
-    c.width = c.height = 64;
-    const g = c.getContext('2d');
-    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(255,236,170,1)');
-    grad.addColorStop(0.35, 'rgba(255,200,90,0.45)');
-    grad.addColorStop(1, 'rgba(255,170,60,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 64, 64);
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    // one halo layer per glowing block: glowstone (warm yellow) and lava (orange-red)
-    this.glowKinds = new Map();
-    // lava: wider and much fainter, so overlapping halos from a whole flow stay soft instead of blowing out
+    // glowstone and lava: wide, faint halos (tinted by each material's colour), so overlapping ones stay soft instead of blowing out
     const soft = document.createElement('canvas');
     soft.width = soft.height = 64;
     const sg = soft.getContext('2d');
     const sgrad = sg.createRadialGradient(32, 32, 0, 32, 32, 32);
-    sgrad.addColorStop(0, 'rgba(255,190,110,0.55)');
-    sgrad.addColorStop(0.5, 'rgba(255,150,70,0.18)');
-    sgrad.addColorStop(1, 'rgba(255,120,40,0)');
+    sgrad.addColorStop(0, 'rgba(255,255,255,0.55)');
+    sgrad.addColorStop(0.5, 'rgba(255,255,255,0.18)');
+    sgrad.addColorStop(1, 'rgba(255,255,255,0)');
     sg.fillStyle = sgrad;
     sg.fillRect(0, 0, 64, 64);
     const softTex = new THREE.CanvasTexture(soft);
     softTex.colorSpace = THREE.SRGBColorSpace;
-    for (const [id, color, size, map, day, night] of [[16, 0xffffff, 3.4, tex, 0.4, 0.85], [10, 0xff7a30, 7.5, softTex, 0.22, 0.45]]) {
+    for (const [id, color, size, map, day, night] of [[16, 0xffd070, 7.0, softTex, 0.22, 0.45], [10, 0xff7a30, 7.5, softTex, 0.22, 0.45]]) {
       const material = new THREE.PointsMaterial({ map, size, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: day });
       material.userData.day = day;
       material.userData.night = night;
