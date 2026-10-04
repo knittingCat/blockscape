@@ -122,6 +122,8 @@ let selection = null; // { a, b } finished selection
 let clip = null; // copied blocks (kept when you open another diorama)
 let lastTapKey = null; // touch: first tap previews the paste, second tap places it
 let cloud = null; // the saved-online diorama we are looking at, if any
+let openStartPicker = () => {}; // opens the starting-scene picker for a first visit
+let startedFresh = false; // true when nothing was saved here, so the visitor starts from a blank grass field
 const SYMMETRY_MODES = ['off', 'x', 'z', 'xz'];
 const SYMMETRY_NAMES = { off: 'off', x: 'left-right', z: 'front-back', xz: 'both ways' };
 let symmetry = 'off'; // build symmetrically: every place/erase/box is repeated across the middle
@@ -909,7 +911,87 @@ function wireUI() {
   $('#undo').addEventListener('click', () => world.undo());
   $('#redo').addEventListener('click', () => world.redo());
 
-  $('#newBtn').addEventListener('click', () => $('#newDialog').showModal());
+  // ----- starting scenes: picture cards -----
+  const TEMPLATES = [
+    ['grass', 'A grass field'],
+    ['grassTree', 'A grass field with a tree'],
+    ['forest', 'A forest'],
+    ['island', 'A small island'],
+    ['empty', 'An empty stand'],
+  ];
+  const avgColors = new Map();
+  const topColor = (id) => {
+    const block = BLOCK_BY_ID.get(id);
+    const name = topTextureName(block);
+    if (!avgColors.has(name)) {
+      const cv = textureCanvas(name);
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        r += d[i];
+        g += d[i + 1];
+        b += d[i + 2];
+      }
+      const n = d.length / 4;
+      avgColors.set(name, [r / n, g / n, b / n]);
+    }
+    return avgColors.get(name);
+  };
+  // a small top-down picture of a starting scene (higher blocks are drawn lighter)
+  const previewCanvas = (kind) => {
+    const w = makeScene(24, kind);
+    const px = 5;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 24 * px;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#3a4260';
+    g.fillRect(0, 0, cv.width, cv.height);
+    for (let z = 0; z < 24; z++) {
+      for (let x = 0; x < 24; x++) {
+        for (let y = w.height - 1; y >= 0; y--) {
+          const id = w.get(x, y, z);
+          if (!id) continue;
+          const [r, gr, b] = topColor(id);
+          const k = 0.75 + Math.min(y, 8) * 0.04;
+          g.fillStyle = `rgb(${Math.min(255, r * k) | 0},${Math.min(255, gr * k) | 0},${Math.min(255, b * k) | 0})`;
+          g.fillRect(x * px, z * px, px, px);
+          break;
+        }
+      }
+    }
+    return cv;
+  };
+  const cardsEl = $('#newCards');
+  const chooseTemplate = (kind) => {
+    $('#newKind').value = kind;
+    cardsEl.querySelectorAll('.card').forEach((c) => c.setAttribute('aria-checked', String(c.dataset.kind === kind)));
+  };
+  let cardsBuilt = false;
+  // first = the start screen for someone with nothing yet (nothing to replace, so Cancel says Skip)
+  const openNewDialog = (first = false) => {
+    if (!cardsBuilt) {
+      cardsBuilt = true;
+      for (const [kind, label] of TEMPLATES) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'card';
+        b.dataset.kind = kind;
+        b.setAttribute('role', 'radio');
+        b.append(previewCanvas(kind), document.createTextNode(label));
+        b.addEventListener('click', () => chooseTemplate(kind));
+        cardsEl.append(b);
+      }
+    }
+    chooseTemplate($('#newKind').value);
+    $('#newTitle').textContent = first ? 'Start a diorama' : 'New diorama';
+    $('#newHint').hidden = first;
+    $('#newCancel').textContent = first ? 'Skip' : 'Cancel';
+    $('#newDialog').showModal();
+  };
+  openStartPicker = () => openNewDialog(true);
+  $('#newBtn').addEventListener('click', () => openNewDialog(false));
   $('#newDialog').addEventListener('close', async () => {
     const dlg = $('#newDialog');
     if (dlg.returnValue !== 'ok') return;
@@ -1070,6 +1152,7 @@ async function loadStart(allowHash = true) {
       return;
     } catch {}
   }
+  startedFresh = true;
   // ?scene=forest starts from another template (handy for screenshots); normally a plain grass field
   const sceneKind = new URLSearchParams(location.search).get('scene');
   await loadFromText(await encodeWorld(makeScene(32, ['grass', 'grassTree', 'forest', 'island', 'empty'].includes(sceneKind) ? sceneKind : 'grass')));
@@ -1142,16 +1225,22 @@ async function main() {
   }
   updateBanner(sharedMode);
   updateStatus();
-  const askToSignIn = () => {
-    // not when someone just opened a shared link: let them look first
-    if (accountApi && !location.hash.startsWith('#s=') && !location.hash.startsWith('#d=') && !location.search.includes('nosignin')) accountApi.promptIfSignedOut();
-  };
+  // First visit order: sign-in prompt, then the help window, then the starting-scene picker.
+  const waitFor = (dialog) => new Promise((resolve) => (dialog.open ? dialog.addEventListener('close', resolve, { once: true }) : resolve()));
+  const shouldAskToSignIn = () => accountApi && !location.hash.startsWith('#s=') && !location.hash.startsWith('#d=') && !location.search.includes('nosignin');
+  if (shouldAskToSignIn()) {
+    accountApi.promptIfSignedOut();
+    await waitFor($('#panel'));
+  }
   if (!store.get('seen-help') && !location.search.includes('nohelp')) {
     store.set('seen-help', '1');
-    $('#helpDialog').addEventListener('close', askToSignIn, { once: true });
     $('#helpDialog').showModal();
-  } else {
-    askToSignIn();
+    await waitFor($('#helpDialog'));
+  }
+  if (location.search.includes('startpicker')) openStartPicker(); // dev: always show the picker (screenshots)
+  else if (startedFresh && !store.get('seen-start') && !location.search.includes('nohelp') && !location.hash.startsWith('#s=') && !location.hash.startsWith('#d=')) {
+    store.set('seen-start', '1');
+    openStartPicker();
   }
   window.blockscape = { get world() { return world; }, get view() { return view; }, setTool, selectBlock, loadFromText, composePicture };
 }
