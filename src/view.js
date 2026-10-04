@@ -433,6 +433,41 @@ export class DioramaView {
     this.fireMeshes = {};
     this.fireCount = 0;
     this.fireFrame = 0;
+    // smoke: soft grey puffs that rise from each burning block, grow and fade (animated on the GPU)
+    this.smokeMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(0x5a5a60) } },
+      vertexShader: `
+        attribute float aPhase;
+        uniform float uTime;
+        varying float vLife;
+        void main() {
+          float life = fract(uTime * 0.2 + aPhase);
+          vLife = life;
+          vec3 p = position;
+          p.y += life * 3.4;
+          p.x += sin(uTime * 0.9 + aPhase * 40.0) * 0.3 * life;
+          p.z += cos(uTime * 0.7 + aPhase * 31.0) * 0.3 * life;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_PointSize = (0.8 + life * 1.3) * 420.0 / -mv.z;
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `
+        uniform vec3 uColor;
+        varying float vLife;
+        void main() {
+          float d = length(gl_PointCoord - 0.5);
+          if (d > 0.5) discard;
+          float a = smoothstep(0.5, 0.0, d) * (1.0 - vLife) * smoothstep(0.0, 0.12, vLife) * 0.5;
+          gl_FragColor = vec4(uColor, a);
+        }`,
+    });
+    this.smoke = new THREE.Points(new THREE.BufferGeometry(), this.smokeMaterial);
+    this.smoke.frustumCulled = false;
+    this.smoke.visible = false;
+    this.smoke.renderOrder = 3;
+    this.scene.add(this.smoke);
     // a soft orange glow over the flames
     this.fireHalo = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: this.glowKinds.get(10).material.map, size: 3, color: 0xff8a30, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.3 }));
     this.fireHalo.frustumCulled = false;
@@ -489,6 +524,19 @@ export class DioramaView {
       entry.mesh.count = list.length;
       entry.mesh.instanceMatrix.needsUpdate = true;
     }
+    const smokePos = [];
+    const smokePhase = [];
+    for (let k = 0; k < halo.length && smokePos.length < 4500; k += 3) {
+      for (let n = 0; n < 3; n++) {
+        smokePos.push(halo[k] + (Math.random() - 0.5) * 0.5, halo[k + 1] + 0.3, halo[k + 2] + (Math.random() - 0.5) * 0.5);
+        smokePhase.push(Math.random());
+      }
+    }
+    this.smoke.geometry.dispose();
+    this.smoke.geometry = new THREE.BufferGeometry();
+    this.smoke.geometry.setAttribute('position', new THREE.Float32BufferAttribute(smokePos, 3));
+    this.smoke.geometry.setAttribute('aPhase', new THREE.Float32BufferAttribute(smokePhase, 1));
+    this.smoke.visible = smokePos.length > 0;
     this.fireHalo.geometry.dispose();
     this.fireHalo.geometry = new THREE.BufferGeometry();
     this.fireHalo.geometry.setAttribute('position', new THREE.Float32BufferAttribute(halo, 3));
@@ -1152,6 +1200,9 @@ export class DioramaView {
     t.y = Math.max(0, Math.min(this.world.height, t.y));
     if (this.flowWaiting) this.updateFlowReveal();
     if (this.fireCount) {
+      this.smokeMaterial.uniforms.uTime.value = performance.now() / 1000;
+      this.smokeMaterial.uniforms.uColor.value.setHex(this.world.fireDestroy ? 0x2c2c30 : 0x5e5e64); // darker, heavier smoke when things are burning away
+      this.dirty = true; // smoke moves every frame
       const frame = Math.floor(performance.now() / 90) % 8; // flames flicker
       if (frame !== this.fireFrame) {
         this.fireFrame = frame;
