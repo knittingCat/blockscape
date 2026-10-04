@@ -279,7 +279,7 @@ await test('Clear leaves the starting scene alone and removes only what was adde
 
 await test('fire: light a block, it spreads to flammable neighbours only, stop keeps it (one undo step), and it is saved', async () => {
   const w = new World(16);
-  w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+  w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 2]), { record: false });
   w.setMany([[4, 1, 4, 11], [5, 1, 4, 12], [6, 1, 4, 3], [7, 1, 4, 11]], { record: false }); // log, planks, STONE, log
   assert.equal(w.setBurning(4, 1, 4, true), true);
   assert.equal(w.fireSpreading, true);
@@ -317,7 +317,7 @@ await test('fire: light a block, it spreads to flammable neighbours only, stop k
 await test('fire can burn blocks away (only when chosen); stone stays; one undo brings everything back', () => {
   const mk = () => {
     const w = new World(16);
-    w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false });
+    w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 2]), { record: false });
     w.setMany([[4, 1, 4, 12], [5, 1, 4, 12], [6, 1, 4, 3]], { record: false }); // planks, planks, stone
     return w;
   };
@@ -343,6 +343,24 @@ await test('fire can burn blocks away (only when chosen); stone stays; one undo 
   assert.equal(w.get(4, 1, 4), 12);
   assert.equal(w.get(5, 1, 4), 12);
   assert.equal(w.burningCells().length, 0); // the flames were not there before the session
+});
+
+await test('fire spreads over grass; with burn-away on, burnt grass becomes dirt and one undo restores it', () => {
+  const w = new World(16);
+  w.setMany(w.boxCells([0, 0, 0], [15, 0, 15]).map(([x, y, z]) => [x, y, z, 1]), { record: false }); // a grass floor
+  w.setMany([[8, 1, 8, 12]], { record: false }); // a plank block standing on it
+  w.fireDestroy = true;
+  w.setBurning(8, 1, 8, true);
+  for (let n = 0; n < 30; n++) w.fireTick(() => 0);
+  assert.ok(w.burningCells().length > 4 || w.get(8, 0, 8) === 2, 'the grass caught fire');
+  let guard = 0;
+  while (w.fireTick(() => 0) && guard++ < 400);
+  assert.equal(w.get(8, 1, 8), 0); // planks used up
+  assert.equal(w.get(8, 0, 8), 2); // grass under it is bare dirt now
+  w.stopFire();
+  w.undo();
+  assert.equal(w.get(8, 1, 8), 12);
+  assert.equal(w.get(8, 0, 8), 1);
 });
 
 await test('people: spin around is wrapped, head can turn a full way', () => {

@@ -384,23 +384,33 @@ export class DioramaView {
 
   // ----- fire: flickering flames on burning blocks (the burning cells live in the world and are saved) -----
   initFire() {
-    // four frames of pixel flames stacked in one texture
+    // eight frames of Minecraft-style pixel flames stacked in one texture: tall ragged tongues, pale yellow at the
+    // base, then yellow, orange and red towards the tips, with gaps between the tongues
+    const FRAMES = 8;
     const c = document.createElement('canvas');
     c.width = 16;
-    c.height = 64;
+    c.height = 16 * FRAMES;
     const g = c.getContext('2d');
-    let seed = 7;
+    let seed = 11;
     const rnd = () => {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff;
       return seed / 0x7fffffff;
     };
-    for (let f = 0; f < 4; f++) {
+    const palette = [[255, 244, 150], [255, 214, 64], [255, 170, 24], [240, 120, 12], [214, 70, 14], [168, 40, 12]];
+    for (let f = 0; f < FRAMES; f++) {
+      const ph = (f / FRAMES) * Math.PI * 2;
       for (let x = 0; x < 16; x++) {
-        const edge = 1 - Math.abs(x - 7.5) / 9; // taller in the middle
-        const h = Math.max(5, Math.min(16, Math.round(6 + edge * 7 + rnd() * 5)));
+        // a few tongues of different heights that sway from frame to frame
+        const wave = Math.sin(x * 0.85 + ph) * 3 + Math.sin(x * 2.3 - ph * 2) * 2 + Math.sin(x * 0.4 + ph * 3) * 1.5;
+        let h = Math.round(11 + wave + rnd() * 2);
+        if (rnd() < 0.18) h -= 4 + Math.floor(rnd() * 3); // a gap between tongues
+        h = Math.max(3, Math.min(16, h));
         for (let k = 0; k < h; k++) {
-          const t = k / 15; // 0 at the bottom of the flame, 1 at the very top
-          const col = t < 0.22 ? [255, 226, 90] : t < 0.55 ? [255, 150, 28] : [226, 56, 16];
+          const t = k / 15;
+          let idx = Math.min(palette.length - 1, Math.floor(t * 6));
+          if (k >= h - 2) idx = Math.min(palette.length - 1, idx + 1); // darker at the very tip
+          if (k > 3 && k < h - 1 && rnd() < 0.1) continue; // little holes make it flicker
+          const col = palette[idx];
           g.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
           g.fillRect(x, f * 16 + 15 - k, 1, 1);
         }
@@ -410,11 +420,11 @@ export class DioramaView {
     this.fireTexture.colorSpace = THREE.SRGBColorSpace;
     this.fireTexture.magFilter = THREE.NearestFilter;
     this.fireTexture.minFilter = THREE.NearestFilter;
-    this.fireTexture.repeat.set(1, 0.25);
+    this.fireTexture.repeat.set(1, 1 / 8);
     this.fireTexture.offset.set(0, 0);
     this.fireMaterial = new THREE.MeshBasicMaterial({ map: this.fireTexture, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
-    // two crossed flame planes standing on a cell's floor
-    const pos = [-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0, 0, 0, -0.5, 0, 0, 0.5, 0, 1, 0.5, 0, 1, -0.5];
+    // two flame planes crossed diagonally (an X seen from above), standing on a cell's floor, like Minecraft's fire
+    const pos = [-0.5, 0, -0.5, 0.5, 0, 0.5, 0.5, 1, 0.5, -0.5, 1, -0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 1, -0.5, -0.5, 1, 0.5];
     const crossed = new THREE.BufferGeometry();
     crossed.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     crossed.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1], 2));
@@ -1142,10 +1152,10 @@ export class DioramaView {
     t.y = Math.max(0, Math.min(this.world.height, t.y));
     if (this.flowWaiting) this.updateFlowReveal();
     if (this.fireCount) {
-      const frame = Math.floor(performance.now() / 120) % 4; // flames flicker
+      const frame = Math.floor(performance.now() / 90) % 8; // flames flicker
       if (frame !== this.fireFrame) {
         this.fireFrame = frame;
-        this.fireTexture.offset.y = frame * 0.25;
+        this.fireTexture.offset.y = frame / 8;
         this.dirty = true;
       }
     }

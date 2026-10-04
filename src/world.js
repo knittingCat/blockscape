@@ -358,7 +358,7 @@ export class World {
   // fire is stopped or runs out of fuel. Nothing is destroyed: the flames simply stay on the blocks as part of
   // the diorama. Starting and stopping a fire is ONE undo step.
   isFlammable(id) {
-    return id === 11 || id === 12 || id === 13 || (id >= 19 && id <= 28);
+    return id === 1 || id === 11 || id === 12 || id === 13 || (id >= 19 && id <= 28); // grass, logs, planks, leaves, wool
   }
   isBurning(x, y, z) {
     return this.inBounds(x, y, z) && this.fire.has(this.index(x, y, z)) && this.cells[this.index(x, y, z)] !== 0;
@@ -416,11 +416,11 @@ export class World {
       if (!this.cells[i]) continue;
       const [x, y, z] = this.coords(i);
       if (this.fireDestroy && this.isFlammable(this.cells[i])) {
-        // with "burn blocks away" on, wood, leaves, planks and wool are eventually used up
+        // with "burn blocks away" on, grass (turns to dirt), wood, leaves, planks and wool are eventually used up
         const age = (this.fireAge.get(i) || 0) + 1;
         this.fireAge.set(i, age);
         more = true;
-        if (age >= 5 && rand() < 0.5) {
+        if (age >= (this.cells[i] === 1 ? 4 : 5) && rand() < 0.5) {
           burnt.push(i);
           continue;
         }
@@ -439,8 +439,10 @@ export class World {
     if (burnt.length) {
       const changes = [];
       for (const i of burnt) {
-        changes.push({ i, from: this.cells[i], to: 0 });
-        this.cells[i] = 0;
+        const was = this.cells[i];
+        const to = was === 1 ? 2 : 0; // burnt grass is left as bare dirt; everything else is used up
+        changes.push({ i, from: was, to });
+        this.cells[i] = to;
         this.fire.delete(i);
         this.fireAge.delete(i);
       }
