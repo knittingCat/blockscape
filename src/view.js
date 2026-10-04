@@ -302,23 +302,29 @@ export class DioramaView {
   }
 
   rebuildFlow() {
-    const cells = this.world.computeFlow();
-    const known = this.flowKnown || new Set();
+    const fresh = this.world.computeFlow();
+    const STEP_TIME = { 9: 0.6, 10: 0.6, 4: 0.8 }; // seconds per step: lava and water spread, drain from the far end
     const key = (c) => `${c.id}:${c.x},${c.y},${c.z}`;
-    // cells that are already showing appear at once; new ones spread out step by step
-    const fresh = cells.filter((c) => !known.has(key(c)));
-    const firstStep = fresh.length ? Math.min(...fresh.map((c) => c.step)) : 0;
-    const STEP_TIME = { 9: 0.6, 10: 0.6, 4: 0.8 }; // seconds per step: lava creeps, water runs
-    for (const c of cells) c.t = known.has(key(c)) ? 0 : (c.step - firstStep + 1) * STEP_TIME[c.id];
-    this.flowKnown = new Set(cells.map(key));
+    const elapsed = (performance.now() - (this.flowStart || 0)) / 1000;
+    // what is on screen right now (including cells still draining), so interrupted animations carry on smoothly
+    const shown = new Map();
+    for (const { items } of this.flowMeshes.values()) for (const it of items || []) if (it.t <= elapsed && elapsed < it.until) shown.set(key(it.c), it.c);
+    const now = new Map(fresh.map((c) => [key(c), c]));
+    const items = [];
+    const newOnes = fresh.filter((c) => !shown.has(key(c)));
+    const firstStep = newOnes.length ? Math.min(...newOnes.map((c) => c.step)) : 0;
+    for (const c of fresh) items.push({ c, t: shown.has(key(c)) ? 0 : (c.step - firstStep + 1) * STEP_TIME[c.id], until: Infinity });
+    // cells that lost their source drain away slowly, the far end first
+    const gone = [...shown].filter(([k]) => !now.has(k)).map(([, c]) => c);
+    const lastStep = gone.length ? Math.max(...gone.map((c) => c.step)) : 0;
+    for (const c of gone) items.push({ c, t: 0, until: (lastStep - c.step + 1) * STEP_TIME[c.id] * 1.2 });
     const byId = new Map();
-    for (const c of cells) {
-      if (!byId.has(c.id)) byId.set(c.id, []);
-      byId.get(c.id).push(c);
+    for (const it of items) {
+      if (!byId.has(it.c.id)) byId.set(it.c.id, []);
+      byId.get(it.c.id).push(it);
     }
     const m = new THREE.Matrix4();
     const off = this.offset;
-    for (const [id, list] of byId) list.sort((a, b) => a.t - b.t);
     for (const id of new Set([...this.flowMeshes.keys(), ...byId.keys()])) {
       const list = byId.get(id) || [];
       let entry = this.flowMeshes.get(id);
@@ -339,34 +345,46 @@ export class DioramaView {
         entry = { mesh, capacity };
         this.flowMeshes.set(id, entry);
       }
-      entry.times = list.map((c) => c.t);
-      list.forEach((c, k) => {
+      for (const it of list) {
+        const c = it.c;
         const R = c.id === 10 ? 3 : 7;
         const h = c.id === 4 || c.fall ? 1 : 0.14 + (0.74 * (c.r + 1)) / (R + 1); // shallower further from the source
-        m.makeScale(1, h, 1);
-        m.setPosition(c.x + 0.5 - off, c.y + h / 2, c.z + 0.5 - off);
-        entry.mesh.setMatrixAt(k, m);
-      });
-      entry.mesh.instanceMatrix.needsUpdate = true;
+        it.mat = new THREE.Matrix4().makeScale(1, h, 1).setPosition(c.x + 0.5 - off, c.y + h / 2, c.z + 0.5 - off);
+      }
+      entry.items = list;
+      entry.nextChange = 0;
     }
     this.flowStart = performance.now();
     this.updateFlowReveal();
     this.applyGlow();
   }
 
-  // Show the flow cells whose turn has come (they appear a little at a time, like spreading liquid).
+  // Show the flow cells whose turn has come and hide the ones that have drained (cells appear and
+  // disappear a little at a time, like liquid spreading or running out).
   updateFlowReveal(all = false) {
     const t = (performance.now() - (this.flowStart || 0)) / 1000;
     let waiting = false;
-    for (const { mesh, times } of this.flowMeshes.values()) {
-      let n = times.length;
-      if (!all) {
-        n = 0;
-        while (n < times.length && times[n] <= t) n++;
+    for (const entry of this.flowMeshes.values()) {
+      const { mesh, items } = entry;
+      if (!all && t < entry.nextChange) {
+        waiting = true;
+        continue;
       }
-      if (n < times.length) waiting = true;
-      if (mesh.count !== n) {
-        mesh.count = n;
+      let k = 0;
+      let next = Infinity;
+      for (const it of items) {
+        if (all ? it.until !== Infinity : false) continue;
+        const visible = all || (it.t <= t && t < it.until);
+        if (visible) {
+          mesh.setMatrixAt(k++, it.mat);
+          if (it.until !== Infinity) next = Math.min(next, it.until);
+        } else if (it.t > t) next = Math.min(next, it.t);
+      }
+      entry.nextChange = next;
+      if (next !== Infinity && !all) waiting = true;
+      if (mesh.count !== k || !all) {
+        mesh.count = k;
+        mesh.instanceMatrix.needsUpdate = true;
         this.dirty = true;
       }
     }
@@ -385,7 +403,6 @@ export class DioramaView {
       mesh.dispose();
     }
     this.flowMeshes.clear();
-    this.flowKnown = null;
     for (const s of this.labelSprites.values()) this.scene.remove(s);
     this.labelSprites.clear();
     for (const { group } of this.personGroups.values()) {
