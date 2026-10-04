@@ -30,8 +30,10 @@ function makeScene(size = 32, kind = 'grass') {
   const w = new World(size);
   const set = (x, y, z, id) => w.setMany([[x, y, z, id]], { record: false });
   const c = size / 2;
-  if (kind === 'grass') {
+  if (kind === 'grass' || kind === 'grassTree') {
     for (let z = 0; z < size; z++) for (let x = 0; x < size; x++) set(x, 0, z, 1);
+  }
+  if (kind === 'grassTree') {
     const tx = Math.floor(c) - 6;
     const tz = Math.floor(c) - 4;
     for (let y = 1; y <= 4; y++) set(tx, y, tz, 11);
