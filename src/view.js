@@ -213,11 +213,16 @@ export class DioramaView {
     g.fillRect(0, 0, 64, 64);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    this.glowMaterial = new THREE.PointsMaterial({ map: tex, size: 3.4, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5 });
-    this.glowPoints = new THREE.Points(new THREE.BufferGeometry(), this.glowMaterial);
-    this.glowPoints.frustumCulled = false;
-    this.glowPoints.visible = false;
-    this.scene.add(this.glowPoints);
+    // one halo layer per glowing block: glowstone (warm yellow) and lava (orange-red)
+    this.glowKinds = new Map();
+    for (const [id, color, size] of [[16, 0xffffff, 3.4], [10, 0xff6a2a, 3.0]]) {
+      const material = new THREE.PointsMaterial({ map: tex, size, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5 });
+      const points = new THREE.Points(new THREE.BufferGeometry(), material);
+      points.frustumCulled = false;
+      points.visible = false;
+      this.scene.add(points);
+      this.glowKinds.set(id, { material, points });
+    }
     // a fixed number of lights (changing the count would make the shaders rebuild)
     this.glowLights = [];
     for (let i = 0; i < 8; i++) {
@@ -231,13 +236,16 @@ export class DioramaView {
   rebuildGlow() {
     const w = this.world;
     const off = this.offset;
-    const pts = [];
+    const ptsById = new Map([...this.glowKinds.keys()].map((id) => [id, []]));
     const buckets = new Map();
     for (let i = 0; i < w.cells.length; i++) {
-      if (w.cells[i] !== 16) continue;
+      const id = w.cells[i];
+      const pts = ptsById.get(id);
+      if (!pts) continue;
       const [x, y, z] = w.coords(i);
       const p = [x + 0.5 - off, y + 0.5, z + 0.5 - off];
       pts.push(...p);
+      if (id !== 16) continue; // only glowstone also gets real lights
       const k = `${Math.floor(x / 6)},${Math.floor(y / 6)},${Math.floor(z / 6)}`;
       const b = buckets.get(k) || { n: 0, x: 0, y: 0, z: 0 };
       b.n++;
@@ -246,10 +254,13 @@ export class DioramaView {
       b.z += p[2];
       buckets.set(k, b);
     }
-    this.glowPoints.geometry.dispose();
-    this.glowPoints.geometry = new THREE.BufferGeometry();
-    this.glowPoints.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    this.glowPoints.visible = pts.length > 0;
+    for (const [id, { points }] of this.glowKinds) {
+      const pts = ptsById.get(id);
+      points.geometry.dispose();
+      points.geometry = new THREE.BufferGeometry();
+      points.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+      points.visible = pts.length > 0;
+    }
     const top = [...buckets.values()].sort((a, b) => b.n - a.n).slice(0, this.glowLights.length);
     this.glowLights.forEach((l, i) => {
       const b = top[i];
@@ -264,7 +275,7 @@ export class DioramaView {
 
   applyGlow() {
     const night = this.world.meta.sky === 'night';
-    this.glowMaterial.opacity = night ? 0.85 : 0.4;
+    for (const { material } of this.glowKinds.values()) material.opacity = night ? 0.85 : 0.4;
     for (const l of this.glowLights) l.intensity = l.userData.base * (night ? 2.2 : 0.8);
     for (const mats of this.materials.values()) for (const m of mats) if (m.userData.glow) m.emissiveIntensity = m.userData.glow * (night ? 1.4 : 0.8);
   }
@@ -351,7 +362,7 @@ export class DioramaView {
       entry.mesh.count = idx.length;
       entry.mesh.instanceMatrix.needsUpdate = true;
     }
-    if (this.glowPoints && (types.has(16) || !this.glowBuilt)) {
+    if (this.glowKinds && (types.has(16) || types.has(10) || !this.glowBuilt)) {
       this.glowBuilt = true;
       this.rebuildGlow();
     }

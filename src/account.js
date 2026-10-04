@@ -18,9 +18,10 @@ export async function initAccount(ctx) {
 
   async function refreshMe() {
     user = (await api('GET', '/api/me')).user;
-    // The Reports button only shows while a report is waiting for this person (an admin, or someone picked to look at one).
+    // The Reports button always shows for admins, and for anyone picked to look at a report while one is waiting.
+    // The red circle with the count only appears while something is waiting.
     const waiting = user ? user.pendingReports || 0 : 0;
-    reportsBtn.hidden = waiting === 0;
+    reportsBtn.hidden = !(user && (user.isAdmin || waiting > 0));
     const badge = $('.count', reportsBtn);
     badge.hidden = waiting === 0;
     badge.textContent = waiting;
@@ -312,7 +313,11 @@ export async function initAccount(ctx) {
     try {
       const { reports } = await api('GET', '/api/reports'); // no window until there is something to show
       if (!reports.length) {
-        await refreshMe(); // someone else already dealt with it: just remove the button
+        await refreshMe(); // someone else already dealt with it: a picked reviewer's button goes away
+        if (user && user.isAdmin) {
+          const el = open('<h2>Reports</h2><p class="hint">Nothing is waiting for you.</p><div class="row"><button type="button" class="primary" data-act="close">Close</button></div>');
+          $('[data-act=close]', el).onclick = close;
+        }
         return;
       }
       const when = (iso) => new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
@@ -353,7 +358,7 @@ export async function initAccount(ctx) {
               ctx.toast(what === 'dismiss' ? 'Report dismissed.' : what === 'hide' ? 'Hidden from the gallery.' : 'Diorama deleted.');
               await refreshMe();
               if (user && user.pendingReports > 0) reportsView();
-              else close(); // nothing left: the button and this window go away
+              else close(); // nothing left: this window closes (and a picked reviewer's button goes away)
             } catch (err) {
               ctx.toast(err.message);
             }

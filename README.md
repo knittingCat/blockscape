@@ -30,7 +30,7 @@ Live site: https://blockscape.onrender.com
 **Accounts and the class gallery** (when the site runs with its server)
 - Sign in with a username and password. No email and no real name.
 - Save dioramas to your account as private or published to the gallery, optionally with a code to open a single diorama, or a code for your whole gallery.
-- Reports: a signed-in person can report a gallery diorama. Admins, or someone picked to review it, see a Reports button with a count of what is waiting, and can open the diorama, dismiss the report, hide the diorama from the gallery, or delete it. A report about an admin's diorama goes to a different admin, or to another member if there is no other admin. Nobody reviews a report they wrote or one about their own diorama. Reports nobody can be picked for stay open for the developer.
+- Reports: a signed-in person can report a gallery diorama. Admins always see a Reports button, and anyone picked to review a report sees it while one is waiting. A white number in a red circle on the button's top left corner shows how many are waiting, and can open the diorama, dismiss the report, hide the diorama from the gallery, or delete it. A report about an admin's diorama goes to a different admin, or to another member if there is no other admin. Nobody reviews a report they wrote or one about their own diorama. Reports nobody can be picked for stay open for the developer.
 
 ## Controls
 
