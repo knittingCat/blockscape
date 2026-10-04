@@ -18,9 +18,9 @@ export async function initAccount(ctx) {
 
   async function refreshMe() {
     user = (await api('GET', '/api/me')).user;
-    // The Reports button is for admins, and for anyone who was picked to look at a report.
+    // The Reports button only shows while a report is waiting for this person (an admin, or someone picked to look at one).
     const waiting = user ? user.pendingReports || 0 : 0;
-    reportsBtn.hidden = !(user && (user.isAdmin || waiting > 0));
+    reportsBtn.hidden = waiting === 0;
     const badge = $('.count', reportsBtn);
     badge.hidden = waiting === 0;
     badge.textContent = waiting;
@@ -346,7 +346,8 @@ export async function initAccount(ctx) {
               await api('POST', `/api/reports/${id}/action`, { action: what });
               ctx.toast(what === 'dismiss' ? 'Report dismissed.' : what === 'hide' ? 'Hidden from the gallery.' : 'Diorama deleted.');
               await refreshMe();
-              reportsView();
+              if (user && user.pendingReports > 0) reportsView();
+              else close(); // nothing left: the button and this window go away
             } catch (err) {
               ctx.toast(err.message);
             }
