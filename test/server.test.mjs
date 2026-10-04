@@ -284,6 +284,22 @@ try {
     assert.deepEqual(left.rows, [{ status: 'open', assigned_to: null }]); // waiting for Claude in the database
   });
 
+  await test('a saved gallery diorama opens by link without signing in; private and code-protected ones do not', async () => {
+    const anon = new Client();
+    const pub = await ann.call('POST', '/api/dioramas', { title: 'Link me', data: DATA, visibility: 'gallery' });
+    const ok = await anon.call('GET', `/api/dioramas/${pub.json.id}/public`);
+    assert.equal(ok.status, 200);
+    assert.equal(ok.json.title, 'Link me');
+    assert.equal(ok.json.mine, false);
+    assert.equal((await ann.call('GET', `/api/dioramas/${pub.json.id}/public`)).json.mine, true);
+    const priv = await ann.call('POST', '/api/dioramas', { title: 'Hidden', data: DATA, visibility: 'private' });
+    assert.equal((await anon.call('GET', `/api/dioramas/${priv.json.id}/public`)).status, 404);
+    const coded = await ann.call('POST', '/api/dioramas', { title: 'Coded', data: DATA, visibility: 'gallery', code: 'secret1' });
+    assert.equal((await anon.call('GET', `/api/dioramas/${coded.json.id}/public`)).status, 404);
+    assert.equal((await anon.call('GET', '/api/dioramas/99999/public')).status, 404);
+    assert.equal((await anon.call('GET', '/api/dioramas/abc/public')).status, 404);
+  });
+
   await test('brute-force protection on login', async () => {
     const attacker = new Client();
     let last;

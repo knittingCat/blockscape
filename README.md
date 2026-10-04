@@ -81,3 +81,8 @@ npm test                      # world logic + the account server (uses throw-awa
 | `src/account.js`, `src/api.js` | Sign in, save online, gallery, codes, reports (browser side) |
 | `server/` | Express server: accounts, sessions, saved dioramas, gallery, reports (Postgres on Neon) |
 | `vendor/` | Three.js r186 and OrbitControls (MIT licence), vendored so the site works offline |
+
+
+### Links to saved dioramas
+
+Share link on a diorama saved to the gallery (no code on it or on the owner's gallery) copies `/#d=<id>`. Anyone can open that without signing in (`GET /api/dioramas/:id/public`); private dioramas and ones behind a code are never served this way and fall back to the long scene link.

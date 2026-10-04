@@ -210,6 +210,20 @@ export function createApp() {
   const unlocked = async (userId, kind, target) =>
     (await query(`SELECT 1 FROM ${T.unlocks} WHERE user_id = $1 AND kind = $2 AND target_id = $3`, [userId, kind, target])).rowCount > 0;
 
+  // A link to a saved diorama that anyone can open without signing in. Only dioramas published to the gallery
+  // and not protected by a code qualify (private ones, and ones behind a code, still need the normal route).
+  app.get('/api/dioramas/:id/public', wrap(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return bad(res, 404, 'Diorama not found.');
+    const { rows } = await query(
+      `SELECT d.id, d.title, d.data, d.owner_id, d.visibility, d.code_hash, u.username, u.gallery_code_hash AS gallery_hash FROM ${T.dioramas} d JOIN ${T.users} u ON u.id = d.owner_id WHERE d.id = $1`,
+      [id],
+    );
+    const d = rows[0];
+    if (!d || d.visibility !== 'gallery' || d.code_hash || d.gallery_hash) return bad(res, 404, 'That diorama is not shared with a link. Ask the owner to share it.');
+    res.json({ id: d.id, title: d.title, data: d.data, owner: d.username, visibility: d.visibility, mine: !!req.user && d.owner_id === req.user.id });
+  }));
+
   app.get('/api/dioramas/:id', needUser, wrap(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return bad(res, 404, 'Diorama not found.');

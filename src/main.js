@@ -878,13 +878,24 @@ function wireUI() {
   });
 
   $('#linkBtn').addEventListener('click', async () => {
-    const url = location.href.split('#')[0] + '#s=' + (await encodeWorld(world));
+    let url = location.href.split('#')[0] + '#s=' + (await encodeWorld(world));
+    let short = false;
+    // A diorama saved to the gallery gets a short link that opens the saved one (and can be reported); anything
+    // else (private, behind a code, not saved) copies the whole scene into the link.
+    if (cloud && cloud.mine && accountApi) {
+      try {
+        await api('GET', `/api/dioramas/${cloud.id}/public`);
+        url = location.href.split('#')[0] + '#d=' + cloud.id;
+        short = true;
+      } catch {}
+    }
     let copied = false;
     try {
       await navigator.clipboard.writeText(url);
       copied = true;
     } catch {}
     if (!copied) window.prompt('Copy this link:', url);
+    else if (short) toast('Link copied! Anyone can open your saved diorama with it, no sign-in needed.');
     else if (url.length > 8000) toast('Link copied, but it is very long — some apps may cut it off. Save is safer for big scenes.', 5000);
     else toast('Link copied! Anyone can open it and look around your diorama.');
   });
@@ -970,12 +981,23 @@ function wireUI() {
   });
   window.addEventListener('keyup', () => refreshHover());
   window.addEventListener('hashchange', () => {
-    if (location.hash.startsWith('#s=')) loadStart(true);
+    if (location.hash.startsWith('#s=') || location.hash.startsWith('#d=')) loadStart(true);
   });
 }
 
 // ---------- start ----------
 async function loadStart(allowHash = true) {
+  // #d=12 is a link to a saved diorama: anyone can open it, signed in or not
+  const linkMatch = allowHash && /^#d=(\d+)$/.exec(location.hash);
+  if (linkMatch) {
+    try {
+      const d = await api('GET', `/api/dioramas/${linkMatch[1]}/public`);
+      await loadFromText(d.data, { shared: !d.mine, cloud: { id: d.id, title: d.title, owner: d.owner, mine: d.mine, visibility: d.visibility } });
+      return;
+    } catch (err) {
+      toast(err.message || "That link didn't work — showing your own diorama instead.", 5000);
+    }
+  }
   if (allowHash && location.hash.startsWith('#s=')) {
     try {
       await loadFromText(location.hash.slice(3), { shared: true });
@@ -1063,7 +1085,7 @@ async function main() {
   updateStatus();
   const askToSignIn = () => {
     // not when someone just opened a shared link: let them look first
-    if (accountApi && !location.hash.startsWith('#s=') && !location.search.includes('nosignin')) accountApi.promptIfSignedOut();
+    if (accountApi && !location.hash.startsWith('#s=') && !location.hash.startsWith('#d=') && !location.search.includes('nosignin')) accountApi.promptIfSignedOut();
   };
   if (!store.get('seen-help') && !location.search.includes('nohelp')) {
     store.set('seen-help', '1');
