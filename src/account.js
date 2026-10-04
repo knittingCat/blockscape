@@ -312,7 +312,7 @@ export async function initAccount(ctx) {
       const when = (iso) => new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
       const el = open(
         `<h2>Reports to review</h2>
-        <p class="hint">${user.isAdmin ? "You see reports about members' dioramas. A report about an admin's diorama goes to a different admin, or to a random person if there is no other admin. If nobody else can be picked, the owner deals with it." : 'You were picked to look at these reports. Open the diorama, then decide.'}</p>
+        <p class="hint">${user.isAdmin ? "You see reports about members' dioramas. A report about an admin's diorama goes to a different admin, or to a random person if there is no other admin. If nobody else can be picked, it is left for Claude to handle." : 'You were picked to look at these reports. Open the diorama, then decide.'}</p>
         ${
           reports.length
             ? reports
@@ -320,7 +320,7 @@ export async function initAccount(ctx) {
                   (r) => `<div class="rrow" data-id="${r.id}">
               <div><b>${esc(r.title)}</b> by ${esc(r.owner)}${r.visibility === 'gallery' ? '' : ' (hidden)'}</div>
               <div class="reason">“${esc(r.reason)}”</div>
-              <div class="hint">${r.reporter ? 'Reported by ' + esc(r.reporter) + ' · ' : ''}${esc(when(r.createdAt))}${r.aboutYou ? ' · about your own diorama (nobody else could review it)' : r.pickedForYou ? ' · you were picked to review this' : ''}</div>
+              <div class="hint">${r.reporter ? 'Reported by ' + esc(r.reporter) + ' · ' : ''}${esc(when(r.createdAt))}${r.pickedForYou ? ' · you were picked to review this' : ''}</div>
               <div class="dactions">
                 <button data-do="open" data-diorama="${r.dioramaId}">Open</button>
                 <button data-do="dismiss">Dismiss</button>

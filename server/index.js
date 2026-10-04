@@ -54,13 +54,12 @@ function buildCsp() {
 
 // SQL used to decide which open reports a person may review.
 //   - a report assigned to them (this is how reports about an admin's diorama reach someone else), or
-//   - for admins: unassigned reports about non-admin owners, and unassigned reports about their OWN diorama
-//     (nobody else could be picked, so the owner deals with it).
-// Nobody reviews a report they wrote.
+//   - for admins: unassigned reports about non-admin owners.
+// Nobody reviews a report they wrote or one about their own diorama. A report about an admin's diorama that
+// nobody else can be picked for stays unassigned: Claude (the developer) deals with it, not the owner.
 const REVIEWABLE = (me, isAdmin) => `
-  r.status = 'open' AND r.reporter_id <> ${me}
-  AND ((r.assigned_to = ${me} AND o.id <> ${me})
-    OR (${isAdmin ? 'TRUE' : 'FALSE'} AND r.assigned_to IS NULL AND (o.is_admin = FALSE OR o.id = ${me}) ))`;
+  r.status = 'open' AND r.reporter_id <> ${me} AND o.id <> ${me}
+  AND (r.assigned_to = ${me} OR (${isAdmin ? 'TRUE' : 'FALSE'} AND r.assigned_to IS NULL AND o.is_admin = FALSE))`;
 
 async function countReports(user) {
   const { rows } = await query(
@@ -342,7 +341,6 @@ export function createApp() {
         owner: r.owner,
         reporter: req.user.is_admin ? r.reporter : null, // only admins see who reported
         pickedForYou: r.assigned_to === me,
-        aboutYou: r.owner_id === me,
       })),
     });
   }));
