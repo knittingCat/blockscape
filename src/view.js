@@ -215,7 +215,7 @@ export class DioramaView {
     tex.colorSpace = THREE.SRGBColorSpace;
     // one halo layer per glowing block: glowstone (warm yellow) and lava (orange-red)
     this.glowKinds = new Map();
-    for (const [id, color, size] of [[16, 0xffffff, 3.4], [10, 0xff6a2a, 3.0]]) {
+    for (const [id, color, size] of [[16, 0xffffff, 3.4], [10, 0xff6a2a, 4.8]]) {
       const material = new THREE.PointsMaterial({ map: tex, size, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5 });
       const points = new THREE.Points(new THREE.BufferGeometry(), material);
       points.frustumCulled = false;
@@ -223,6 +223,11 @@ export class DioramaView {
       this.scene.add(points);
       this.glowKinds.set(id, { material, points });
     }
+    // halos for flowing lava (follows the animated flow, see updateFlowReveal)
+    this.lavaFlowPoints = new THREE.Points(new THREE.BufferGeometry(), this.glowKinds.get(10).material);
+    this.lavaFlowPoints.frustumCulled = false;
+    this.lavaFlowPoints.visible = false;
+    this.scene.add(this.lavaFlowPoints);
     // a fixed number of lights (changing the count would make the shaders rebuild)
     this.glowLights = [];
     for (let i = 0; i < 8; i++) {
@@ -422,7 +427,7 @@ export class DioramaView {
         mesh.renderOrder = block.alpha ? 2 : 0;
         mesh.count = 0;
         this.scene.add(mesh);
-        entry = { mesh, capacity };
+        entry = { mesh, capacity, id };
         this.flowMeshes.set(id, entry);
       }
       for (const it of list) {
@@ -452,15 +457,24 @@ export class DioramaView {
       }
       let k = 0;
       let next = Infinity;
+      const halo = [];
+      const off = this.offset;
       for (const it of items) {
         if (all ? it.until !== Infinity : false) continue;
         const visible = all || (it.t <= t && t < it.until);
         if (visible) {
           mesh.setMatrixAt(k++, it.mat);
+          if (entry.id === 10) halo.push(it.c.x + 0.5 - off, it.c.y + 0.4, it.c.z + 0.5 - off);
           if (it.until !== Infinity) next = Math.min(next, it.until);
         } else if (it.t > t) next = Math.min(next, it.t);
       }
       entry.nextChange = next;
+      if (entry.id === 10) {
+        this.lavaFlowPoints.geometry.dispose();
+        this.lavaFlowPoints.geometry = new THREE.BufferGeometry();
+        this.lavaFlowPoints.geometry.setAttribute('position', new THREE.Float32BufferAttribute(halo, 3));
+        this.lavaFlowPoints.visible = halo.length > 0;
+      }
       if (next !== Infinity && !all) waiting = true;
       if (mesh.count !== k || !all) {
         mesh.count = k;
@@ -483,6 +497,7 @@ export class DioramaView {
       mesh.dispose();
     }
     this.flowMeshes.clear();
+    this.lavaFlowPoints.visible = false;
     for (const s of this.labelSprites.values()) this.scene.remove(s);
     this.labelSprites.clear();
     for (const { group } of this.personGroups.values()) {
