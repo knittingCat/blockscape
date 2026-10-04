@@ -241,7 +241,7 @@ function updateBanner(shared) {
   banner.hidden = !(shared || viewingOthers);
   $('#bannerText').textContent = viewingOthers
     ? `Viewing “${cloud.title}” by ${cloud.owner}. Drag to look around, scroll to zoom.`
-    : "You're viewing a shared diorama (view only). Drag to look around, scroll to zoom.";
+    : "Viewing a shared diorama. Drag to look around, scroll to zoom.";
   $('#reportBtn').hidden = !(viewingOthers && accountApi);
   $('#backGalleryBtn').hidden = !(viewingOthers && accountApi);
   // Someone else's diorama: no toolbar, no palette, no editing.
