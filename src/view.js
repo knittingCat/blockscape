@@ -202,6 +202,7 @@ export class DioramaView {
 
   // ----- glow: a faint halo around glowstone and lava blocks -----
   initGlow() {
+    this.glowKinds = new Map(); // block id -> { material, points }
     // glowstone and lava: wide, faint halos (tinted by each material's colour), so overlapping ones stay soft instead of blowing out
     const soft = document.createElement('canvas');
     soft.width = soft.height = 64;
