@@ -30,16 +30,71 @@ function makeScene(size = 32, kind = 'grass') {
   const w = new World(size);
   const set = (x, y, z, id) => w.setMany([[x, y, z, id]], { record: false });
   const c = size / 2;
-  if (kind === 'grass' || kind === 'grassTree') {
+  // a tree: log trunk with a rounded top of leaves (blocks that are off the stand are skipped by the world)
+  const tree = (tx, tz, height = 4) => {
+    for (let y = 1; y <= height; y++) set(tx, y, tz, 11);
+    for (let y = height; y <= height + 2; y++) {
+      const r = y === height + 2 ? 1 : 2;
+      for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) if (!(dx === 0 && dz === 0 && y < height + 1)) set(tx + dx, y, tz + dz, 13);
+    }
+  };
+  if (kind === 'grass' || kind === 'grassTree' || kind === 'forest') {
     for (let z = 0; z < size; z++) for (let x = 0; x < size; x++) set(x, 0, z, 1);
   }
   if (kind === 'grassTree') {
-    const tx = Math.floor(c) - 6;
-    const tz = Math.floor(c) - 4;
-    for (let y = 1; y <= 4; y++) set(tx, y, tz, 11);
-    for (let y = 4; y <= 6; y++) {
-      const r = y === 6 ? 1 : 2;
-      for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) if (!(dx === 0 && dz === 0 && y < 5)) set(tx + dx, y, tz + dz, 13);
+    tree(Math.floor(c) - 6, Math.floor(c) - 4, 4);
+  } else if (kind === 'forest') {
+    // the same forest every time: a small pond, a dirt path winding through, and trees, bushes and rocks around them
+    let seed = 20261004;
+    const rand = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const taken = new Set();
+    const mark = (x, z, r) => {
+      for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) taken.add(`${x + dx},${z + dz}`);
+    };
+    // pond
+    const px = Math.floor(size * 0.7);
+    const pz = Math.floor(size * 0.3);
+    for (let dx = -3; dx <= 3; dx++) {
+      for (let dz = -3; dz <= 3; dz++) {
+        const d = Math.hypot(dx, dz * 1.2);
+        if (d < 2.6) set(px + dx, 0, pz + dz, 9);
+        else if (d < 3.6) set(px + dx, 0, pz + dz, 5);
+      }
+    }
+    mark(px, pz, 4);
+    // path: from the front edge up towards the pond, wiggling
+    let x = Math.floor(c) - 4;
+    for (let z = size - 1; z >= pz + 4; z--) {
+      x += Math.round(rand() * 2 - 1) * (z % 3 === 0 ? 1 : 0);
+      x = Math.max(2, Math.min(size - 3, x));
+      for (const dx of [0, 1]) {
+        set(x + dx, 0, z, 2);
+        mark(x + dx, z, 1);
+      }
+    }
+    // trees, spaced out
+    const count = Math.round((size * size) / 30);
+    let placed = 0;
+    for (let tries = 0; tries < count * 12 && placed < count; tries++) {
+      const tx = 2 + Math.floor(rand() * (size - 4));
+      const tz = 2 + Math.floor(rand() * (size - 4));
+      if (taken.has(`${tx},${tz}`)) continue;
+      tree(tx, tz, 3 + Math.floor(rand() * 4));
+      mark(tx, tz, 3);
+      placed++;
+    }
+    // bushes and rocks in the gaps
+    for (let n = 0; n < size * 2; n++) {
+      const bx = 1 + Math.floor(rand() * (size - 2));
+      const bz = 1 + Math.floor(rand() * (size - 2));
+      if (w.get(bx, 0, bz) !== 1 || w.get(bx, 1, bz) !== 0) continue;
+      if (rand() < 0.65) set(bx, 1, bz, 13);
+      else set(bx, 1, bz, 3);
     }
   } else if (kind === 'island') {
     for (let z = 0; z < size; z++) {
@@ -1015,7 +1070,9 @@ async function loadStart(allowHash = true) {
       return;
     } catch {}
   }
-  await loadFromText(await encodeWorld(makeScene(32, 'grass')));
+  // ?scene=forest starts from another template (handy for screenshots); normally a plain grass field
+  const sceneKind = new URLSearchParams(location.search).get('scene');
+  await loadFromText(await encodeWorld(makeScene(32, ['grass', 'grassTree', 'forest', 'island', 'empty'].includes(sceneKind) ? sceneKind : 'grass')));
 }
 
 async function main() {
