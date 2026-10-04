@@ -402,10 +402,11 @@ export class DioramaView {
     const newOnes = fresh.filter((c) => !shown.has(key(c)));
     const firstStep = newOnes.length ? Math.min(...newOnes.map((c) => c.step)) : 0;
     for (const c of fresh) items.push({ c, t: shown.has(key(c)) ? 0 : (c.step - firstStep + 1) * STEP_TIME[c.id], until: Infinity });
-    // cells that lost their source drain away slowly, the far end first
+    // cells that lost their source drain away slowly, starting next to where the source was and moving outward
+    // and downward (the way liquid runs off), not back up toward it
     const gone = [...shown].filter(([k]) => !now.has(k)).map(([, c]) => c);
-    const lastStep = gone.length ? Math.max(...gone.map((c) => c.step)) : 0;
-    for (const c of gone) items.push({ c, t: 0, until: (lastStep - c.step + 1) * STEP_TIME[c.id] * 1.2 });
+    const firstGone = gone.length ? Math.min(...gone.map((c) => c.step)) : 0;
+    for (const c of gone) items.push({ c, t: 0, until: (c.step - firstGone + 1) * STEP_TIME[c.id] * 1.2 });
     const byId = new Map();
     for (const it of items) {
       if (!byId.has(it.c.id)) byId.set(it.c.id, []);

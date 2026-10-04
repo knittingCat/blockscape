@@ -395,6 +395,7 @@ export function createApp() {
   app.get('/style.css', send('style.css'));
   // no-cache = the browser re-checks (cheap ETag request) so a deploy shows up on the next refresh, not 5 minutes later
   app.use('/src', express.static(path.join(ROOT, 'src'), { dotfiles: 'deny', etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
+  app.use('/img', express.static(path.join(ROOT, 'img'), { dotfiles: 'deny', maxAge: '1d' })); // pictures of the starting scenes
   app.use('/vendor', express.static(path.join(ROOT, 'vendor'), { dotfiles: 'deny', maxAge: '7d' }));
 
   app.use((err, req, res, next) => {

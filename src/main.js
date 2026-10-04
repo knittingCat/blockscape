@@ -66,7 +66,7 @@ function makeScene(size = 32, kind = 'grass') {
         else if (d < 3.6) set(px + dx, 0, pz + dz, 5);
       }
     }
-    mark(px, pz, 4);
+    mark(px, pz, 6); // keep canopies off the pond
     // path: from the front edge up towards the pond, wiggling
     let x = Math.floor(c) - 4;
     for (let z = size - 1; z >= pz + 4; z--) {
@@ -74,18 +74,18 @@ function makeScene(size = 32, kind = 'grass') {
       x = Math.max(2, Math.min(size - 3, x));
       for (const dx of [0, 1]) {
         set(x + dx, 0, z, 2);
-        mark(x + dx, z, 1);
+        mark(x + dx, z, 2); // and off the path
       }
     }
     // trees, spaced out
-    const count = Math.round((size * size) / 30);
+    const count = Math.round((size * size) / 30); // as many as fit; canopies are 5 wide, so trees stay 6 apart and never touch
     let placed = 0;
     for (let tries = 0; tries < count * 12 && placed < count; tries++) {
       const tx = 2 + Math.floor(rand() * (size - 4));
       const tz = 2 + Math.floor(rand() * (size - 4));
       if (taken.has(`${tx},${tz}`)) continue;
       tree(tx, tz, 3 + Math.floor(rand() * 4));
-      mark(tx, tz, 3);
+      mark(tx, tz, 5);
       placed++;
     }
     // bushes and rocks in the gaps
@@ -919,50 +919,6 @@ function wireUI() {
     ['island', 'A small island'],
     ['empty', 'An empty stand'],
   ];
-  const avgColors = new Map();
-  const topColor = (id) => {
-    const block = BLOCK_BY_ID.get(id);
-    const name = topTextureName(block);
-    if (!avgColors.has(name)) {
-      const cv = textureCanvas(name);
-      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        r += d[i];
-        g += d[i + 1];
-        b += d[i + 2];
-      }
-      const n = d.length / 4;
-      avgColors.set(name, [r / n, g / n, b / n]);
-    }
-    return avgColors.get(name);
-  };
-  // a small top-down picture of a starting scene (higher blocks are drawn lighter)
-  const previewCanvas = (kind) => {
-    const w = makeScene(24, kind);
-    const px = 5;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 24 * px;
-    const g = cv.getContext('2d');
-    g.fillStyle = '#3a4260';
-    g.fillRect(0, 0, cv.width, cv.height);
-    for (let z = 0; z < 24; z++) {
-      for (let x = 0; x < 24; x++) {
-        for (let y = w.height - 1; y >= 0; y--) {
-          const id = w.get(x, y, z);
-          if (!id) continue;
-          const [r, gr, b] = topColor(id);
-          const k = 0.75 + Math.min(y, 8) * 0.04;
-          g.fillStyle = `rgb(${Math.min(255, r * k) | 0},${Math.min(255, gr * k) | 0},${Math.min(255, b * k) | 0})`;
-          g.fillRect(x * px, z * px, px, px);
-          break;
-        }
-      }
-    }
-    return cv;
-  };
   const cardsEl = $('#newCards');
   const chooseTemplate = (kind) => {
     $('#newKind').value = kind;
@@ -979,7 +935,11 @@ function wireUI() {
         b.className = 'card';
         b.dataset.kind = kind;
         b.setAttribute('role', 'radio');
-        b.append(previewCanvas(kind), document.createTextNode(label));
+        const img = document.createElement('img');
+        img.src = `img/template-${kind}.jpg`; // a real top-down rendering of the scene
+        img.alt = '';
+        img.width = img.height = 128;
+        b.append(img, document.createTextNode(label));
         b.addEventListener('click', () => chooseTemplate(kind));
         cardsEl.append(b);
       }
@@ -1159,6 +1119,7 @@ async function loadStart(allowHash = true) {
 }
 
 async function main() {
+  if (location.search.includes('clean')) document.body.classList.add('clean');
   world = makeScene(32, 'grass');
   attachWorld(world);
   view = new DioramaView(stage, world);
