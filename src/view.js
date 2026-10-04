@@ -215,8 +215,22 @@ export class DioramaView {
     tex.colorSpace = THREE.SRGBColorSpace;
     // one halo layer per glowing block: glowstone (warm yellow) and lava (orange-red)
     this.glowKinds = new Map();
-    for (const [id, color, size] of [[16, 0xffffff, 3.4], [10, 0xff6a2a, 4.8]]) {
-      const material = new THREE.PointsMaterial({ map: tex, size, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5 });
+    // lava: wider and much fainter, so overlapping halos from a whole flow stay soft instead of blowing out
+    const soft = document.createElement('canvas');
+    soft.width = soft.height = 64;
+    const sg = soft.getContext('2d');
+    const sgrad = sg.createRadialGradient(32, 32, 0, 32, 32, 32);
+    sgrad.addColorStop(0, 'rgba(255,190,110,0.55)');
+    sgrad.addColorStop(0.5, 'rgba(255,150,70,0.18)');
+    sgrad.addColorStop(1, 'rgba(255,120,40,0)');
+    sg.fillStyle = sgrad;
+    sg.fillRect(0, 0, 64, 64);
+    const softTex = new THREE.CanvasTexture(soft);
+    softTex.colorSpace = THREE.SRGBColorSpace;
+    for (const [id, color, size, map, day, night] of [[16, 0xffffff, 3.4, tex, 0.4, 0.85], [10, 0xff7a30, 7.5, softTex, 0.22, 0.45]]) {
+      const material = new THREE.PointsMaterial({ map, size, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: day });
+      material.userData.day = day;
+      material.userData.night = night;
       const points = new THREE.Points(new THREE.BufferGeometry(), material);
       points.frustumCulled = false;
       points.visible = false;
@@ -280,7 +294,7 @@ export class DioramaView {
 
   applyGlow() {
     const night = this.world.meta.sky === 'night';
-    for (const { material } of this.glowKinds.values()) material.opacity = night ? 0.85 : 0.4;
+    for (const { material } of this.glowKinds.values()) material.opacity = night ? material.userData.night : material.userData.day;
     for (const l of this.glowLights) l.intensity = l.userData.base * (night ? 2.2 : 0.8);
     for (const mats of this.materials.values()) for (const m of mats) if (m.userData.glow) m.emissiveIntensity = m.userData.glow * (night ? 1.4 : 0.8);
   }
