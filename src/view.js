@@ -215,7 +215,7 @@ export class DioramaView {
     sg.fillRect(0, 0, 64, 64);
     const softTex = new THREE.CanvasTexture(soft);
     softTex.colorSpace = THREE.SRGBColorSpace;
-    for (const [id, color, size, map, day, night] of [[16, 0xffd070, 5.0, softTex, 0.09, 0.18], [10, 0xff7a30, 5.0, softTex, 0.09, 0.18]]) {
+    for (const [id, color, size, map, day, night] of [[16, 0xffd070, 4.2, softTex, 0.3, 0.55], [10, 0xff7a30, 4.2, softTex, 0.3, 0.55]]) {
       const material = new THREE.PointsMaterial({ map, size, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: day });
       material.userData.day = day;
       material.userData.night = night;
