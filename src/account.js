@@ -295,11 +295,12 @@ export async function initAccount(ctx) {
         <div class="chips">${g.members.length ? g.members.map((m) => `<button class="chip" data-user="${esc(m.username)}">${m.locked ? '[Locked] ' : ''}${esc(m.username)} <small>${m.count}</small></button>`).join('') : '<span class="hint">No one has shared anything yet.</span>'}</div>
         <h3>Newest</h3>
         ${cards(g.recent)}
-        <div class="row"><button type="button" class="primary" data-act="close">Close</button></div>`,
+        <div class="row"><button type="button" data-act="refresh">Refresh</button><button type="button" class="primary" data-act="close">Close</button></div>`,
         { wide: true },
       );
       wireCards(el);
       el.querySelectorAll('[data-class]').forEach((b) => (b.onclick = () => classView(Number(b.dataset.class))));
+      $('[data-act=refresh]', el).onclick = galleryView;
       $('#joinForm', el).onsubmit = async (e) => {
         e.preventDefault();
         try {
@@ -340,7 +341,7 @@ export async function initAccount(ctx) {
         <h3>People <small>${c.members.length}</small></h3>
         <div class="chips">${c.members.map((m) => `<span class="chip">${esc(m.username)}${m.isOwner ? ' (teacher)' : ''}${c.manage && !m.isOwner ? ` <button class="link" data-transfer="${esc(m.username)}" title="Make them the teacher of this class">make teacher</button> <button class="link" data-remove="${esc(m.username)}" title="Remove from the class">remove</button>` : ''}</span>`).join('')}</div>
         <p class="error" id="classError" hidden></p>
-        <div class="row"><button type="button" data-act="back">← Gallery</button>${c.isOwner ? '<button type="button" data-act="delete">Delete class</button>' : '<button type="button" data-act="leave">Leave class</button>'}<button type="button" class="primary" data-act="close">Close</button></div>`,
+        <div class="row"><button type="button" data-act="back">← Gallery</button><button type="button" data-act="refresh">Refresh</button>${c.isOwner ? '<button type="button" data-act="delete">Delete class</button>' : '<button type="button" data-act="leave">Leave class</button>'}<button type="button" class="primary" data-act="close">Close</button></div>`,
         { wide: true },
       );
       wireCards(el);
@@ -388,6 +389,7 @@ export async function initAccount(ctx) {
         galleryView();
       });
       $('[data-act=back]', el).onclick = galleryView;
+      $('[data-act=refresh]', el).onclick = () => classView(id);
       $('[data-act=close]', el).onclick = close;
     } catch (err) {
       ctx.toast(err.message);
@@ -400,11 +402,12 @@ export async function initAccount(ctx) {
       if (g.locked) return unlockView({ kind: 'gallery', id: g.ownerId, owner: g.owner, then: () => userGalleryView(username) });
       const el = open(
         `<h2>${esc(g.owner)}'s gallery</h2>${cards(g.dioramas)}
-        <div class="row"><button type="button" data-act="back">← All galleries</button><button type="button" class="primary" data-act="close">Close</button></div>`,
+        <div class="row"><button type="button" data-act="back">← All galleries</button><button type="button" data-act="refresh">Refresh</button><button type="button" class="primary" data-act="close">Close</button></div>`,
         { wide: true },
       );
       wireCards(el);
       $('[data-act=back]', el).onclick = galleryView;
+      $('[data-act=refresh]', el).onclick = () => userGalleryView(username);
       $('[data-act=close]', el).onclick = close;
     } catch (err) {
       ctx.toast(err.message);
