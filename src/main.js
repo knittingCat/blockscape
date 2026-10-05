@@ -408,6 +408,7 @@ function openPersonDialog(id) {
       <button type="button" data-act="left">Turn left</button>
       <button type="button" data-act="right">Turn right</button>
       <button type="button" data-act="random">Surprise me</button>
+      <button type="button" data-act="straight">Head straight</button>
       <button type="button" data-act="move">Move</button>
       <button type="button" data-act="look">Look through their eyes</button>
     </div>
@@ -435,6 +436,10 @@ function openPersonDialog(id) {
   body.querySelector('[data-act=right]').onclick = () => world.updatePerson(id, { rot: world.getPerson(id).rot + 1 });
   body.querySelector('[data-act=random]').onclick = () => {
     world.updatePerson(id, randomOutfit());
+    sync();
+  };
+  body.querySelector('[data-act=straight]').onclick = () => {
+    world.updatePerson(id, { headTurn: 0, headTilt: 0 });
     sync();
   };
   body.querySelector('[data-act=move]').onclick = () => {
@@ -1024,6 +1029,7 @@ function wireUI() {
   });
 
   $('#lookDone').onclick = stopLooking;
+  $('#lookMatch').onclick = () => view.matchHeadToBody();
   window.addEventListener('keydown', (e) => {
     if (view.looking) {
       if (e.key === 'Escape' || e.key === 'Enter') stopLooking();

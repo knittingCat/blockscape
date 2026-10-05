@@ -840,6 +840,15 @@ export class DioramaView {
     return true;
   }
 
+  // Point the head the same way as the body (straight ahead, level).
+  matchHeadToBody() {
+    const L = this.looking;
+    if (!L) return;
+    L.headYaw = 0;
+    L.headPitch = 0;
+    this.applyLook();
+  }
+
   // Walk one cell: blocked by solid blocks (a single block can be stepped up, a drop of up to 3 is fine).
   stepPerson(dx, dz) {
     const L = this.looking;
