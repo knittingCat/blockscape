@@ -760,45 +760,58 @@ export class DioramaView {
   }
 
   // ----- looking through a person's eyes -----
-  // Drag (or arrow keys) to look around; the person ends up facing the way you were looking.
+  // Arrow keys walk, Shift+arrows spin (left/right) and lay down / get up (up/down), dragging turns the head.
+  // Nothing is written to the person until exitPerson() hands back the final state.
   enterPerson(p) {
     const entry = this.personGroups.get(p.id);
     if (!entry || this.looking) return false;
-    const off = this.offset;
-    const a = ((p.rot * 3 + p.twist) * Math.PI) / 6; // the figure faces (sin a, 0, cos a)
-    const lying = p.pose !== 'standing';
-    const at = new THREE.Vector3(p.x + 0.5 - off, p.y + (lying ? 0.55 : 1.4), p.z + 0.5 - off);
-    if (lying) at.add(new THREE.Vector3(-1.1 * Math.sin(a), 0, -1.1 * Math.cos(a))); // head end
     this.saved = { pos: this.camera.position.clone(), target: this.controls.target.clone(), fov: this.camera.fov };
-    this.looking = { id: p.id, lying, yaw: a + (lying ? 0 : (p.headTurn * Math.PI) / 6) + Math.PI, pitch: lying ? -1.1 : -p.headTilt * 0.35, group: entry.group };
+    this.looking = {
+      id: p.id,
+      x: p.x,
+      y: p.y,
+      z: p.z,
+      k: (p.rot * 3 + p.twist) % 12, // body direction in 30 degree steps
+      pose: p.pose,
+      headYaw: (p.headTurn * Math.PI) / 6,
+      headPitch: -p.headTilt * 0.35,
+      group: entry.group,
+    };
     entry.group.visible = false; // do not look at the inside of their own head
     this.controls.enabled = false;
     this.camera.fov = 70;
     this.camera.updateProjectionMatrix();
     this.camera.rotation.order = 'YXZ';
-    this.camera.position.copy(at);
-    this.applyLook();
     const L = this.looking;
+    this.applyLook();
     L.down = (e) => {
       L.drag = { x: e.clientX, y: e.clientY };
       this.canvas.setPointerCapture?.(e.pointerId);
     };
     L.move = (e) => {
       if (!L.drag) return;
-      L.yaw += (e.clientX - L.drag.x) * 0.006;
-      L.pitch += (e.clientY - L.drag.y) * 0.006;
+      L.headYaw += (e.clientX - L.drag.x) * 0.006;
+      L.headPitch += (e.clientY - L.drag.y) * 0.006;
       L.drag = { x: e.clientX, y: e.clientY };
       this.applyLook();
     };
     L.up = () => (L.drag = null);
     L.key = (e) => {
-      const step = 0.12;
-      if (e.key === 'ArrowLeft') L.yaw += step;
-      else if (e.key === 'ArrowRight') L.yaw -= step;
-      else if (e.key === 'ArrowUp') L.pitch -= step;
-      else if (e.key === 'ArrowDown') L.pitch += step;
-      else return;
+      if (!e.key.startsWith('Arrow')) return;
       e.preventDefault();
+      if (e.shiftKey) {
+        if (e.key === 'ArrowLeft') L.k = (L.k + 1) % 12;
+        else if (e.key === 'ArrowRight') L.k = (L.k + 11) % 12;
+        else if (e.key === 'ArrowUp') L.pose = L.pose === 'lying' ? 'standing' : 'lyingFront'; // fall forward / get up from your back
+        else L.pose = L.pose === 'lyingFront' ? 'standing' : 'lying'; // fall backward / get up from your front
+      } else {
+        const a = (L.k * Math.PI) / 6;
+        const sx = Math.sin(a);
+        const sz = Math.cos(a);
+        const f = Math.abs(sx) > Math.abs(sz) ? [Math.sign(sx), 0] : [0, Math.sign(sz)]; // the nearest of the 4 grid directions
+        const d = e.key === 'ArrowUp' ? f : e.key === 'ArrowDown' ? [-f[0], -f[1]] : e.key === 'ArrowLeft' ? [f[1], -f[0]] : [-f[1], f[0]];
+        this.stepPerson(d[0], d[1]);
+      }
       this.applyLook();
     };
     this.canvas.addEventListener('pointerdown', L.down);
@@ -809,14 +822,51 @@ export class DioramaView {
     return true;
   }
 
+  // Walk one cell: blocked by solid blocks (a single block can be stepped up, a drop of up to 3 is fine).
+  stepPerson(dx, dz) {
+    const L = this.looking;
+    const w = this.world;
+    const nx = L.x + dx;
+    const nz = L.z + dz;
+    if (!w.inBounds(nx, 0, nz)) return;
+    const tall = L.pose === 'standing' ? 2 : 1;
+    const free = (y) => {
+      for (let i = 0; i < tall; i++) if (y + i >= w.height || w.get(nx, y + i, nz) !== 0) return false;
+      return true;
+    };
+    let y = L.y;
+    if (!free(y)) {
+      if (!free(y + 1)) return;
+      y += 1;
+    } else {
+      let fall = 0;
+      while (y > 0 && w.get(nx, y - 1, nz) === 0 && fall < 3) {
+        y--;
+        fall++;
+      }
+      if (y > 0 && w.get(nx, y - 1, nz) === 0) return; // too far to drop
+    }
+    L.x = nx;
+    L.y = y;
+    L.z = nz;
+  }
+
   applyLook() {
     const L = this.looking;
-    L.pitch = Math.max(-1.4, Math.min(1.4, L.pitch));
-    this.camera.rotation.set(-L.pitch, L.yaw, 0);
+    const lying = L.pose !== 'standing';
+    const a = (L.k * Math.PI) / 6; // the figure faces (sin a, 0, cos a)
+    L.headYaw = Math.max(-Math.PI, Math.min(Math.PI, L.headYaw));
+    L.headPitch = Math.max(-0.7, Math.min(0.7, L.headPitch));
+    const off = this.offset;
+    const at = new THREE.Vector3(L.x + 0.5 - off, L.y + (lying ? 0.55 : 1.4), L.z + 0.5 - off);
+    if (lying) at.add(new THREE.Vector3(-1.1 * Math.sin(a), 0, -1.1 * Math.cos(a))); // head end
+    this.camera.position.copy(at);
+    const pitch = Math.max(-1.4, Math.min(1.4, (lying ? -1.1 : 0) + L.headPitch));
+    this.camera.rotation.set(-pitch, a + L.headYaw + Math.PI, 0);
     this.dirty = true;
   }
 
-  // Leave the person's eyes; returns { id, rot } with the way they were looking (0-3).
+  // Leave the person's eyes; returns the person's final state: { id, x, y, z, rot, twist, pose, headTurn, headTilt }.
   exitPerson() {
     const L = this.looking;
     if (!L) return null;
@@ -835,12 +885,17 @@ export class DioramaView {
     this.controls.enabled = true;
     this.controls.update();
     this.dirty = true;
-    const turn = L.yaw - Math.PI; // the way they now look, as an angle
-    const rot = ((Math.round(turn / (Math.PI / 2)) % 4) + 4) % 4;
-    if (L.lying) return { id: L.id, rot, twist: 0 }; // lying down: only the body direction follows the view
-    // whatever is left over (up to 45 degrees) turns the head, and looking up/down tilts it
-    const rest = turn - Math.round(turn / (Math.PI / 2)) * (Math.PI / 2);
-    return { id: L.id, rot, twist: 0, headTurn: Math.round(rest / (Math.PI / 6)), headTilt: -Math.round(L.pitch / 0.35) };
+    return {
+      id: L.id,
+      x: L.x,
+      y: L.y,
+      z: L.z,
+      rot: Math.floor(L.k / 3),
+      twist: L.k % 3,
+      pose: L.pose,
+      headTurn: Math.max(-6, Math.min(6, Math.round(L.headYaw / (Math.PI / 6)))),
+      headTilt: Math.max(-2, Math.min(2, -Math.round(L.headPitch / 0.35))),
+    };
   }
 
   // id of the person under the pointer, or null

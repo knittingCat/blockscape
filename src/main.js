@@ -533,7 +533,7 @@ function stopLooking() {
   $('#lookBar').hidden = true;
   if (!r) return;
   const person = world.getPerson(r.id);
-  const next = { rot: r.rot, twist: r.twist ?? person?.twist, headTurn: r.headTurn ?? person?.headTurn, headTilt: r.headTilt ?? person?.headTilt };
+  const { id, ...next } = r;
   if (person && Object.keys(next).some((k) => person[k] !== next[k])) {
     const before = { ...person };
     world.updatePerson(r.id, next);

@@ -19,7 +19,7 @@ Live site: https://blockscape.onrender.com
 **People**
 - Add a person, then change their skin, hair, hat, top, bottoms, shoes and name.
 - Pose them standing or lying down, turn the whole person and the head separately, and move them.
-- Look through their eyes: drag to look around, and they turn to face the way you looked.
+- Look through their eyes: arrow keys walk, Shift + left/right spins, Shift + up/down lays down or gets up, and dragging turns the head. The person ends up wherever you left them.
 
 **Share**
 - Picture: a PNG with an optional title and caption bar.
