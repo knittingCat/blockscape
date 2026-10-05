@@ -5,7 +5,7 @@ export const HEIGHT = 32;
 
 // ---- people (decorative figures with a customizable outfit; not part of the block grid) ----
 export const PERSON_CHOICES = {
-  pose: ['standing', 'lying', 'lyingFront'], // lying = on their back, lyingFront = on their front
+  pose: ['standing', 'sitting', 'lying', 'lyingFront'], // sitting = on the floor of the cell, legs forward; lying = on their back, lyingFront = on their front
   hairStyle: ['none', 'short', 'long'],
   sleeves: ['short', 'long', 'none'],
   bottoms: ['pants', 'shorts', 'skirt'],

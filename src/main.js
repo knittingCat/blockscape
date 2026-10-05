@@ -354,7 +354,7 @@ const SHIRTS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6'
 const PANTS = ['#1f2937', '#374151', '#1e3a8a', '#7c2d12', '#3f6212', '#581c87', '#475569'];
 const HAIRS = ['#1c1917', '#3b2a1a', '#7c4a1e', '#c27a2c', '#e5c07b', '#b91c1c', '#9ca3af'];
 const CHOICE_LABELS = {
-  standing: 'Standing', lying: 'Lying on back', lyingFront: 'Lying on front', none: 'None', short: 'Short', long: 'Long', pants: 'Pants', shorts: 'Shorts', skirt: 'Skirt',
+  standing: 'Standing', sitting: 'Sitting', lying: 'Lying on back', lyingFront: 'Lying on front', none: 'None', short: 'Short', long: 'Long', pants: 'Pants', shorts: 'Shorts', skirt: 'Skirt',
   cap: 'Cap', beanie: 'Beanie', tophat: 'Top hat', crown: 'Crown',
 };
 const CHOICE_TITLES = { hairStyle: 'Hair', sleeves: 'Sleeves', bottoms: 'Bottoms', hat: 'Hat' };

@@ -629,13 +629,30 @@ export class DioramaView {
       return m;
     };
     // legs and shoes
+    const sitting = p.pose === 'sitting';
     for (const sx of [-0.13, 0.13]) {
-      if (p.bottoms === 'pants') add(0.24, 0.7, 0.28, sx, 0, 0, p.pants);
+      let leg = g;
+      let x = sx;
+      if (sitting) {
+        // the legs swing forward from the hip, so they stick out along the front of the figure
+        leg = new THREE.Group();
+        leg.position.set(sx, 0.7, 0);
+        leg.rotation.x = -Math.PI / 2;
+        g.add(leg);
+        part = leg;
+        lower = 0.7;
+        x = 0;
+      }
+      if (p.bottoms === 'pants') add(0.24, 0.7, 0.28, x, 0, 0, p.pants);
       else if (p.bottoms === 'shorts') {
-        add(0.24, 0.36, 0.28, sx, 0.34, 0, p.pants);
-        add(0.24, 0.34, 0.28, sx, 0, 0, p.skin);
-      } else add(0.24, 0.7, 0.28, sx, 0, 0, p.skin);
-      add(0.26, 0.1, 0.36, sx, 0, 0.04, p.shoes);
+        add(0.24, 0.36, 0.28, x, 0.34, 0, p.pants);
+        add(0.24, 0.34, 0.28, x, 0, 0, p.skin);
+      } else add(0.24, 0.7, 0.28, x, 0, 0, p.skin);
+      if (sitting) {
+        part = g;
+        lower = 0;
+        add(0.26, 0.28, 0.12, sx, 0.56, 0.7, p.shoes); // the feet at the end of the legs
+      } else add(0.26, 0.1, 0.36, sx, 0, 0.04, p.shoes);
     }
     if (p.bottoms === 'skirt') add(0.62, 0.34, 0.36, 0, 0.5, 0, p.pants);
     // torso and arms
@@ -685,7 +702,8 @@ export class DioramaView {
     g.scale.setScalar(0.9);
     g.rotation.order = 'YXZ'; // lie down first, then turn around the vertical
     g.rotation.y = ((p.rot * 3 + p.twist) * Math.PI) / 6; // rot is quarter turns, twist is 30 degree steps
-    const lying = p.pose !== 'standing';
+    const lying = p.pose === 'lying' || p.pose === 'lyingFront';
+    if (sitting) g.position.y = -0.5; // the seat of the figure rests on the floor
     if (lying) {
       // on their back (face up) or on their front (face down); head toward the back of the cell
       g.rotation.x = p.pose === 'lyingFront' ? Math.PI / 2 : -Math.PI / 2;
@@ -700,7 +718,7 @@ export class DioramaView {
       if (lying) {
         const a = ((p.rot * 3 + p.twist) * Math.PI) / 6; // head is at -z of the figure, turned by rot
         tag.position.set(-1.3 * Math.sin(a), 0.9, -1.3 * Math.cos(a));
-      } else tag.position.set(0, 2.25, 0);
+      } else tag.position.set(0, sitting ? 1.75 : 2.25, 0);
       holder.add(tag);
     }
     return holder;
@@ -829,7 +847,7 @@ export class DioramaView {
     const nx = L.x + dx;
     const nz = L.z + dz;
     if (!w.inBounds(nx, 0, nz)) return;
-    const tall = L.pose === 'standing' ? 2 : 1;
+    const tall = L.pose === 'lying' || L.pose === 'lyingFront' ? 1 : 2;
     const free = (y) => {
       for (let i = 0; i < tall; i++) if (y + i >= w.height || w.get(nx, y + i, nz) !== 0) return false;
       return true;
@@ -853,12 +871,12 @@ export class DioramaView {
 
   applyLook() {
     const L = this.looking;
-    const lying = L.pose !== 'standing';
+    const lying = L.pose === 'lying' || L.pose === 'lyingFront';
     const a = (L.k * Math.PI) / 6; // the figure faces (sin a, 0, cos a)
     L.headYaw = Math.max(-Math.PI, Math.min(Math.PI, L.headYaw));
     L.headPitch = Math.max(-0.7, Math.min(0.7, L.headPitch));
     const off = this.offset;
-    const at = new THREE.Vector3(L.x + 0.5 - off, L.y + (lying ? 0.55 : 1.4), L.z + 0.5 - off);
+    const at = new THREE.Vector3(L.x + 0.5 - off, L.y + (lying ? 0.55 : L.pose === 'sitting' ? 0.9 : 1.4), L.z + 0.5 - off);
     if (lying) at.add(new THREE.Vector3(-1.1 * Math.sin(a), 0, -1.1 * Math.cos(a))); // head end
     this.camera.position.copy(at);
     const pitch = Math.max(-1.4, Math.min(1.4, (lying ? -1.1 : 0) + L.headPitch));
