@@ -114,6 +114,13 @@ export function createApp() {
     res.json({ user: { ...publicUser(req.user), pendingReports: await countReports(req.user) } });
   }));
 
+  app.post('/api/visit', rateLimiter({ windowMs: 3600e3, max: 120 }), wrap(async (req, res) => {
+    await query(`INSERT INTO ${T.visits} (logged_in, user_id) VALUES ($1, $2)`, [!!req.user, req.user ? req.user.id : null]);
+    await query(`DELETE FROM ${T.visits} WHERE visited_at < NOW() - INTERVAL '7 days'`); // visit rows only last a week
+    if (req.user) await query(`UPDATE ${T.users} SET visit_count = visit_count + 1 WHERE id = $1`, [req.user.id]);
+    res.json({ ok: true });
+  }));
+
   app.post('/api/signup', rateLimiter({ windowMs: 3600e3, max: 10 }), wrap(async (req, res) => {
     const username = String(req.body.username || '').trim();
     const password = req.body.password;
