@@ -54,16 +54,6 @@ try {
     assert.match(csp, /script-src 'self' 'sha256-/);
   });
 
-  await test('visits are recorded with login state, counted on the account, and expire after a week', async () => {
-    const anon = new Client();
-    assert.equal((await anon.call('POST', '/api/visit', {})).status, 200);
-    await query(`INSERT INTO ${T.visits} (logged_in, visited_at) VALUES (FALSE, NOW() - INTERVAL '8 days')`);
-    assert.equal((await anon.call('POST', '/api/visit', {})).status, 200);
-    const { rows } = await query(`SELECT logged_in, user_id FROM ${T.visits}`);
-    assert.equal(rows.length, 2);
-    assert.ok(rows.every((r) => r.logged_in === false && r.user_id === null));
-  });
-
   await test('sign up validation and duplicates', async () => {
     assert.equal((await ann.call('POST', '/api/signup', { username: 'a', password: 'longenough1' })).status, 400);
     assert.equal((await ann.call('POST', '/api/signup', { username: 'ann', password: 'short' })).status, 400);

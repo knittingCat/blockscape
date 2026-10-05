@@ -4,7 +4,7 @@ import pg from 'pg';
 // TABLE_PREFIX lets the automated tests use their own throw-away tables in the same database.
 export const PREFIX = process.env.TABLE_PREFIX || '';
 const t = (name) => `${PREFIX}${name}`;
-export const T = { users: t('users'), sessions: t('sessions'), dioramas: t('dioramas'), unlocks: t('unlocks'), reports: t('reports'), visits: t('visits'), classes: t('classes'), members: t('class_members') };
+export const T = { users: t('users'), sessions: t('sessions'), dioramas: t('dioramas'), unlocks: t('unlocks'), reports: t('reports'), classes: t('classes'), members: t('class_members') };
 
 function connectionString() {
   const raw = process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL;
@@ -80,17 +80,6 @@ export async function initDb() {
     ALTER TABLE ${T.reports} ALTER COLUMN reporter_id DROP NOT NULL;
     ALTER TABLE ${T.reports} ADD COLUMN IF NOT EXISTS reporter_ip TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS ${t('reports_anon_once')} ON ${T.reports} (diorama_id, reporter_ip) WHERE reporter_id IS NULL;
-  `);
-
-  // Visits: one row per page load, with whether the visitor was signed in; signed-in visits also count on the account.
-  await query(`
-    ALTER TABLE ${T.users} ADD COLUMN IF NOT EXISTS visit_count INTEGER NOT NULL DEFAULT 0;
-    CREATE TABLE IF NOT EXISTS ${T.visits} (
-      id SERIAL PRIMARY KEY,
-      visited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      logged_in BOOLEAN NOT NULL,
-      user_id INTEGER REFERENCES ${T.users}(id) ON DELETE SET NULL
-    );
   `);
 
   // Class galleries: a class has an owner (the teacher) and members who joined with the class code. A diorama

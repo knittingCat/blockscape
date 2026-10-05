@@ -31,7 +31,6 @@ export async function initAccount(ctx) {
     accountBtn.title = user ? 'Your dioramas and settings' : 'Sign in or create an account';
   }
   await refreshMe();
-  api('POST', '/api/visit', {}).catch(() => {}); // count this page load (once per load, not per refreshMe)
   // keep the Reports button honest without a page refresh when you come back to the tab (no timer, so the database can still sleep)
   const recheck = () => user && !document.hidden && refreshMe().catch(() => {});
   document.addEventListener('visibilitychange', recheck);
