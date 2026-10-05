@@ -168,7 +168,7 @@ export function createApp() {
   // --- class galleries ---
   const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no look-alike letters or digits
   const newClassCode = () => Array.from({ length: 6 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
-  const MAX_CLASSES_OWNED = 5;
+  const MAX_CLASSES_OWNED = 10;
   const classCard = (r) => ({ id: r.id, title: r.title, owner: r.username, thumb: r.thumb, locked: false, updatedAt: r.updated_at });
   // Returns the class (with isOwner) for a member, or sends the error and returns null.
   const needClassMember = async (req, res) => {
