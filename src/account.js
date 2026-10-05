@@ -86,6 +86,7 @@ export async function initAccount(ctx) {
         ctx.statusChanged && ctx.statusChanged();
         ctx.toast(`Hi ${user.username}!`);
         close();
+        if (ctx.onSignedIn) ctx.onSignedIn();
         if (after) after();
       } catch (err) {
         fail($('#authError', el), err);

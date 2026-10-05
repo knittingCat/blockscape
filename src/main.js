@@ -123,6 +123,8 @@ let clip = null; // copied blocks (kept when you open another diorama)
 let lastTapKey = null; // touch: first tap previews the paste, second tap places it
 let cloud = null; // the saved-online diorama we are looking at, if any
 let openStartPicker = () => {}; // opens the starting-scene picker for a first visit
+let booted = false; // false until the first-visit sequence has finished
+let signedInDuringBoot = false;
 let startedFresh = false; // true when nothing was saved here, so the visitor starts from a blank grass field
 const SYMMETRY_MODES = ['off', 'x', 'z', 'xz'];
 const SYMMETRY_NAMES = { off: 'off', x: 'left-right', z: 'front-back', xz: 'both ways' };
@@ -1134,6 +1136,12 @@ async function main() {
     makeThumb: () => view.snapshot(320, 200).toDataURL('image/jpeg', 0.72),
     toast,
     statusChanged: updateStatus,
+    onSignedIn: () => {
+      // Signing in offers a new diorama (Skip keeps what is on screen). While the page is still starting up,
+      // the start sequence below shows it after the help window instead.
+      if (!booted) signedInDuringBoot = true;
+      else if (!location.hash.startsWith('#d=')) openStartPicker();
+    },
     onSignedOut: async () => {
       // Signing out takes your diorama away: forget the browser copy and start from a blank scene.
       clearTimeout(cloudTimer);
@@ -1199,10 +1207,12 @@ async function main() {
     await waitFor($('#helpDialog'));
   }
   if (location.search.includes('startpicker')) openStartPicker(); // dev: always show the picker (screenshots)
+  else if (signedInDuringBoot) openStartPicker();
   else if (startedFresh && !store.get('seen-start') && !location.search.includes('nohelp') && !location.hash.startsWith('#s=') && !location.hash.startsWith('#d=')) {
     store.set('seen-start', '1');
     openStartPicker();
   }
+  booted = true;
   window.blockscape = { get world() { return world; }, get view() { return view; }, setTool, selectBlock, loadFromText, composePicture };
 }
 
