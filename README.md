@@ -10,14 +10,11 @@ Live site: https://blockscape.onrender.com
 
 **Build**
 - 28 blocks with pixel-art textures: grass, dirt, stone, cobblestone, sand, snow, ice, water, lava, wood, bricks, glass, glowstone, gold, obsidian and coloured wool.
-- Tools: Build, Erase, Box (fill an area), Select, Pick (copy a block's type), Sign (floating text), Person, Fire.
+- Tools: Build, Erase, Box (fill an area), Select, Pick (copy a block's type), Sign (floating text), Person.
 - Copy and paste whole structures, with rotate and mirror. Build symmetrically across the left-right or front-back middle line.
 - Undo and redo for everything, including Clear, which removes only what you added and leaves the scene you started with.
 - Water and lava flow: sources fall through empty space and spread across surfaces, seeking nearby drops, and drain away when the source is removed. Flowing lava that meets water cools to cobblestone. The flow is worked out from the source blocks, so only the sources are saved.
 - Water and lava sources with nothing under them fall until they rest on something.
-
-**Fire**
-- The Fire tool lights a block; the flames spread to wood, leaves and wool next to it (nothing is destroyed unless you tick Burn blocks away, which uses up the wood, leaves, planks and wool that burn). Press Stop spreading (or Esc) and the flames stay as part of the diorama, saved with it. Click a burning block to put it out.
 
 **People**
 - Add a person, then change their skin, hair, hat, top, bottoms, shoes and name.

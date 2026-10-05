@@ -122,10 +122,8 @@ body.viewonly #stage canvas { cursor: grab; }
 .rrow .dactions { margin-top: .5rem; flex-wrap: wrap; }
 .rrow .dactions button { flex: 0 1 auto; padding: .3rem .7rem; }
 
-#lookBar, #fireBar { position: absolute; left: 50%; bottom: 5.8rem; transform: translateX(-50%); display: flex; align-items: center; gap: .6rem; background: rgba(18,21,31,.92); border: 1px solid #60a5fa; border-radius: 12px; padding: .4rem .7rem; z-index: 6; font-size: .9rem; max-width: 94vw; flex-wrap: wrap; justify-content: center; }
-#lookBar[hidden], #fireBar[hidden] { display: none; }
-#fireBar { border-color: #f97316; }
-body.viewonly #fireBar { display: none !important; }
+#lookBar { position: absolute; left: 50%; bottom: 5.8rem; transform: translateX(-50%); display: flex; align-items: center; gap: .6rem; background: rgba(18,21,31,.92); border: 1px solid #60a5fa; border-radius: 12px; padding: .4rem .7rem; z-index: 6; font-size: .9rem; max-width: 94vw; flex-wrap: wrap; justify-content: center; }
+#lookBar[hidden] { display: none; }
 
 #reportsBtn { position: relative; }
 #reportsBtn .count { position: absolute; top: -6px; left: -6px; width: 1.15rem; height: 1.15rem; padding: 0; min-width: 0; line-height: 1.15rem; font-weight: 700; box-shadow: 0 0 0 2px #1a1d2b; }
