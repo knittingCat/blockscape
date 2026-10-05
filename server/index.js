@@ -292,6 +292,22 @@ export function createApp() {
     res.json({ ok: true });
   }));
 
+  // hand the class to another member; the old teacher stays in the class as a member
+  app.post('/api/classes/:id/transfer', needUser, wrap(async (req, res) => {
+    const c = await needClassMember(req, res);
+    if (!c) return;
+    if (!c.isOwner && !req.user.is_admin) return bad(res, 403, 'Only the person who runs the class can hand it over.');
+    const { rows } = await query(
+      `SELECT u.id, u.username FROM ${T.users} u JOIN ${T.members} m ON m.user_id = u.id AND m.class_id = $2 WHERE LOWER(u.username) = LOWER($1)`,
+      [String(req.body.username || ''), c.id],
+    );
+    if (!rows[0] || rows[0].id === c.owner_id) return bad(res, 400, 'Pick someone else who is in the class.');
+    const { rows: owned } = await query(`SELECT COUNT(*)::int AS n FROM ${T.classes} WHERE owner_id = $1`, [rows[0].id]);
+    if (owned[0].n >= MAX_CLASSES_OWNED) return bad(res, 400, `${rows[0].username} already runs ${MAX_CLASSES_OWNED} classes.`);
+    await query(`UPDATE ${T.classes} SET owner_id = $1 WHERE id = $2`, [rows[0].id, c.id]);
+    res.json({ ok: true, owner: rows[0].username });
+  }));
+
   app.post('/api/classes/:id/takedown', needUser, wrap(async (req, res) => {
     const c = await needClassMember(req, res);
     if (!c) return;

@@ -373,6 +373,16 @@ try {
     // but choosing it again in the Save window (explicit) does
     assert.equal((await ben.call('POST', '/api/dioramas', { id: shared.json.id, title: 'Class project', data: DATA, visibility: 'class', classId, explicit: true })).status, 200);
     assert.equal((await ann.call('GET', `/api/classes/${classId}`)).json.dioramas.length, 1);
+    // handing the class over: only the teacher, only to another member
+    assert.equal((await ben.call('POST', `/api/classes/${classId}/transfer`, { username: 'ben' })).status, 403);
+    assert.equal((await ann.call('POST', `/api/classes/${classId}/transfer`, { username: 'ann' })).status, 400); // already the teacher
+    assert.equal((await ann.call('POST', `/api/classes/${classId}/transfer`, { username: 'nobody' })).status, 400);
+    assert.equal((await ann.call('POST', `/api/classes/${classId}/transfer`, { username: 'cat' })).status, 400); // not in the class
+    assert.equal((await ann.call('POST', `/api/classes/${classId}/transfer`, { username: 'BEN' })).status, 200);
+    assert.equal((await ben.call('GET', `/api/classes/${classId}`)).json.isOwner, true);
+    assert.equal((await ann.call('GET', `/api/classes/${classId}`)).json.code, null); // Ann is now just a member
+    assert.equal((await ann.call('POST', `/api/classes/${classId}/code`, {})).status, 403);
+    assert.equal((await ben.call('POST', `/api/classes/${classId}/transfer`, { username: 'ann' })).status, 200); // and back
     // leaving, and deleting the class
     assert.equal((await ann.call('POST', `/api/classes/${classId}/leave`, {})).status, 400); // the teacher cannot leave
     assert.equal((await ben.call('POST', `/api/classes/${classId}/leave`, {})).status, 200);

@@ -338,7 +338,7 @@ export async function initAccount(ctx) {
         ${c.manage ? `<p>Class code: <b class="code">${esc(c.code)}</b> <button type="button" data-act="newcode">New code</button><br><small class="hint">Give this code to your students (Gallery, then Join a class).</small></p>` : ''}
         ${cards(c.dioramas, { takedown: c.manage })}
         <h3>People <small>${c.members.length}</small></h3>
-        <div class="chips">${c.members.map((m) => `<span class="chip">${esc(m.username)}${m.isOwner ? ' (teacher)' : ''}${c.manage && !m.isOwner ? ` <button class="link" data-remove="${esc(m.username)}" title="Remove from the class">remove</button>` : ''}</span>`).join('')}</div>
+        <div class="chips">${c.members.map((m) => `<span class="chip">${esc(m.username)}${m.isOwner ? ' (teacher)' : ''}${c.manage && !m.isOwner ? ` <button class="link" data-transfer="${esc(m.username)}" title="Make them the teacher of this class">make teacher</button> <button class="link" data-remove="${esc(m.username)}" title="Remove from the class">remove</button>` : ''}</span>`).join('')}</div>
         <p class="error" id="classError" hidden></p>
         <div class="row"><button type="button" data-act="back">← Gallery</button>${c.isOwner ? '<button type="button" data-act="delete">Delete class</button>' : '<button type="button" data-act="leave">Leave class</button>'}<button type="button" class="primary" data-act="close">Close</button></div>`,
         { wide: true },
@@ -359,6 +359,12 @@ export async function initAccount(ctx) {
       el.querySelectorAll('[data-remove]').forEach((b) => (b.onclick = run(async () => {
         if (!confirm(`Remove ${b.dataset.remove} from the class? Their dioramas leave the class but they keep them.`)) return;
         await api('POST', `/api/classes/${id}/remove`, { username: b.dataset.remove });
+        classView(id);
+      })));
+      el.querySelectorAll('[data-transfer]').forEach((b) => (b.onclick = run(async () => {
+        if (!confirm(`Hand this class over to ${b.dataset.transfer}? They become the teacher and can remove people, change the code and delete the class. You stay in the class as a member.`)) return;
+        await api('POST', `/api/classes/${id}/transfer`, { username: b.dataset.transfer });
+        ctx.toast(`${b.dataset.transfer} now runs the class.`);
         classView(id);
       })));
       const newCode = $('[data-act=newcode]', el);
