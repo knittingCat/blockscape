@@ -59,17 +59,17 @@ function makeScene(size = 32, kind = 'grass') {
     // pond
     const px = Math.floor(size * 0.7);
     const pz = Math.floor(size * 0.3);
-    for (let dx = -3; dx <= 3; dx++) {
-      for (let dz = -3; dz <= 3; dz++) {
-        const d = Math.hypot(dx, dz * 1.2);
-        if (d < 2.6) set(px + dx, 0, pz + dz, 9);
-        else if (d < 3.6) set(px + dx, 0, pz + dz, 5);
+    for (let dx = -7; dx <= 7; dx++) {
+      for (let dz = -7; dz <= 7; dz++) {
+        const d = Math.hypot(dx, dz);
+        if (d < 5.4) set(px + dx, 0, pz + dz, 9); // the pond fills the whole clearing, ringed by sand
+        else if (d < 6.4) set(px + dx, 0, pz + dz, 5);
       }
     }
-    mark(px, pz, 6); // keep canopies off the pond
+    mark(px, pz, 8); // keep canopies off the pond
     // path: from the front edge up towards the pond, wiggling
     let x = Math.floor(c) - 4;
-    for (let z = size - 1; z >= pz + 4; z--) {
+    for (let z = size - 1; z >= pz + 8; z--) {
       x += Math.round(rand() * 2 - 1) * (z % 3 === 0 ? 1 : 0);
       x = Math.max(2, Math.min(size - 3, x));
       for (const dx of [0, 1]) {
