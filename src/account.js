@@ -356,7 +356,7 @@ export async function initAccount(ctx) {
         <p class="hint">Run by ${esc(c.owner)}. Only people in this class can see what is shared here.</p>
         ${c.manage ? `<p>Class code: <b class="code">${esc(c.code)}</b> <button type="button" data-act="newcode">New code</button><br><small class="hint">Give this code to your students (Gallery, then Join a class).</small></p>` : ''}
         ${cards(c.dioramas, { takedown: c.manage })}
-        <h3>People <small>${c.members.length}</small></h3>
+        <h3>People</h3>
         <ul class="members">${c.members
           .map(
             (m) => `<li><span>${esc(m.username)}${m.isOwner ? ' <small class="hint">(teacher)</small>' : ''}</span>${
