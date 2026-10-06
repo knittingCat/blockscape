@@ -983,28 +983,6 @@ function wireUI() {
   // With accounts, Save goes to your account; without a server it downloads a file as before.
   $('#saveBtn').addEventListener('click', () => (accountApi ? accountApi.save() : saveFile()));
 
-  $('#linkBtn').addEventListener('click', async () => {
-    let url = location.href.split('#')[0] + '#s=' + (await encodeWorld(world));
-    let short = false;
-    // A diorama saved to the gallery gets a short link that opens the saved one (and can be reported); anything
-    // else (private, behind a code, not saved) copies the whole scene into the link.
-    if (cloud && cloud.mine && accountApi) {
-      try {
-        await api('GET', `/api/dioramas/${cloud.id}/public`);
-        url = location.href.split('#')[0] + '#d=' + cloud.id;
-        short = true;
-      } catch {}
-    }
-    let copied = false;
-    try {
-      await navigator.clipboard.writeText(url);
-      copied = true;
-    } catch {}
-    if (!copied) window.prompt('Copy this link:', url);
-    else if (short) toast('Link copied! Anyone can open your saved diorama with it, no sign-in needed.');
-    else if (url.length > 8000) toast('Link copied, but it is very long — some apps may cut it off. Save is safer for big scenes.', 5000);
-    else toast('Link copied! Anyone can open it and look around your diorama.');
-  });
 
   $('#picBtn').addEventListener('click', () => {
     $('#picTitle').value = world.meta.title || '';

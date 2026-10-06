@@ -199,7 +199,7 @@ export async function initAccount(ctx) {
               <button class="dthumb" data-open="${d.id}" title="Open">${d.thumb ? `<img src="${esc(d.thumb)}" alt="">` : `<span>${d.locked ? 'Locked' : 'No picture'}</span>`}</button>
               <div class="dtitle">${d.locked ? '[Locked] ' : ''}${esc(d.title)}</div>
               <div class="dmeta">${mine ? (d.visibility === 'gallery' ? 'In my gallery' : d.visibility === 'class' ? 'Class: ' + esc(d.className || '') : 'Only me') + (d.hasCode ? ' · needs a code' : '') : `by <button class="link" data-user="${esc(d.owner)}">${esc(d.owner)}</button>`}</div>
-              ${mine ? `<div class="dactions"><button data-open="${d.id}">Open</button><button data-del="${d.id}">Delete</button></div>` : takedown ? `<div class="dactions"><button data-takedown="${d.id}">Take down</button></div>` : ''}
+              ${mine ? `<div class="dactions"><button data-open="${d.id}">Open</button>${d.visibility === 'gallery' && !d.hasCode ? `<button data-link="${d.id}">Copy link</button>` : ''}<button data-del="${d.id}">Delete</button></div>` : takedown ? `<div class="dactions"><button data-takedown="${d.id}">Take down</button></div>` : d.locked ? '' : `<div class="dactions"><button data-link="${d.id}">Copy link</button></div>`}
             </div>`,
           )
           .join('')}</div>`
@@ -208,6 +208,24 @@ export async function initAccount(ctx) {
   function wireCards(el) {
     el.querySelectorAll('[data-open]').forEach((b) => (b.onclick = () => openDiorama(Number(b.dataset.open))));
     el.querySelectorAll('[data-user]').forEach((b) => (b.onclick = () => userGalleryView(b.dataset.user)));
+    el.querySelectorAll('[data-link]').forEach(
+      (b) =>
+        (b.onclick = async () => {
+          const url = `${location.origin}${location.pathname}#d=${b.dataset.link}`;
+          try {
+            await api('GET', `/api/dioramas/${b.dataset.link}/public`); // only everyone-gallery dioramas without a code can be linked
+          } catch {
+            ctx.toast('This diorama is not public, so it has no link.');
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(url);
+            ctx.toast('Link copied. Anyone can open it, no sign-in needed.');
+          } catch {
+            window.prompt('Copy this link:', url);
+          }
+        }),
+    );
   }
 
   // ---------- my dioramas ----------

@@ -23,7 +23,7 @@ Live site: https://blockscape.onrender.com
 
 **Share**
 - Picture: a PNG with an optional title and caption bar.
-- Share link: for a diorama saved to the gallery it copies a short link (`/#d=<id>`) that anyone can open without signing in. For anything else the whole scene is inside the link.
+- Copy link: only in the Gallery and My dioramas cards (no toolbar button). It copies a short link (`/#d=<id>`) that anyone can open without signing in; only everyone-gallery dioramas without a code have one.
 - Save a diorama to your account. It also autosaves in the browser.
 - Anyone opening someone else's diorama sees it view-only, with a Report button.
 
