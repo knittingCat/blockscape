@@ -1,0 +1,12 @@
+# Keeps the free Render service awake by loading the home page, which does not touch the database,
+# so Neon can still sleep. Minutes are offset from :00 because GitHub drops scheduled runs at busy times.
+name: keepalive
+on:
+  schedule:
+    - cron: '3-58/5 * * * *' # every 5 minutes, at :03, :08, :13, ...
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS --max-time 60 -o /dev/null https://blockscape.onrender.com/
