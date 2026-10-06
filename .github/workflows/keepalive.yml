@@ -3,8 +3,8 @@
 name: keepalive
 on:
   schedule:
-    - cron: '*/10 14-23 * * *' # 7am-4pm PDT (6am-3pm PST)
-    - cron: '*/10 0-4 * * *' # 5pm-9pm PDT (4pm-8pm PST)
+    - cron: '*/8 14-23 * * *' # 7am-4pm PDT (6am-3pm PST)
+    - cron: '*/8 0-4 * * *' # 5pm-9pm PDT (4pm-8pm PST)
   workflow_dispatch:
 jobs:
   ping:
