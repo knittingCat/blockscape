@@ -199,7 +199,7 @@ export async function initAccount(ctx) {
               <button class="dthumb" data-open="${d.id}" title="Open">${d.thumb ? `<img src="${esc(d.thumb)}" alt="">` : `<span>${d.locked ? 'Locked' : 'No picture'}</span>`}</button>
               <div class="dtitle">${d.locked ? '[Locked] ' : ''}${esc(d.title)}</div>
               <div class="dmeta">${mine ? (d.visibility === 'gallery' ? 'In my gallery' : d.visibility === 'class' ? 'Class: ' + esc(d.className || '') : 'Only me') + (d.hasCode ? ' · needs a code' : '') : `by <button class="link" data-user="${esc(d.owner)}">${esc(d.owner)}</button>`}</div>
-              ${mine ? `<div class="dactions"><button data-open="${d.id}">Open</button>${d.visibility === 'gallery' && !d.hasCode ? `<button data-link="${d.id}">Copy link</button>` : ''}<button data-del="${d.id}">Delete</button></div>` : takedown ? `<div class="dactions"><button data-takedown="${d.id}">Take down</button></div>` : d.locked ? '' : `<div class="dactions"><button data-link="${d.id}">Copy link</button></div>`}
+              ${mine ? `<div class="dactions"><button data-open="${d.id}">Open</button>${d.visibility === 'gallery' && !d.hasCode ? `<button data-link="${d.id}">Copy link</button>` : ''}<button data-del="${d.id}">Delete</button></div>` : takedown ? `<div class="dactions"><button data-takedown="${d.id}">Take down</button></div>` : ''}
             </div>`,
           )
           .join('')}</div>`
@@ -303,7 +303,7 @@ export async function initAccount(ctx) {
         `<h2>Gallery</h2>
         <p class="hint">Dioramas other people chose to share. Be kind — use Report if something isn't okay.</p>
         <h3>My classes</h3>
-        <div class="chips">${classes.length ? classes.map((c) => `<button class="chip" data-class="${c.id}">${esc(c.name)}${c.isOwner ? ` <small>${c.members}</small>` : ''}</button>`).join('') : '<span class="hint">You are not in a class yet.</span>'}</div>
+        <div class="chips">${classes.length ? classes.map((c) => `<button class="chip" data-class="${c.id}">${esc(c.name)} <small>${c.members}</small></button>`).join('') : '<span class="hint">You are not in a class yet.</span>'}</div>
         <form id="joinForm" class="inlineform">
           <input name="code" maxlength="12" autocomplete="off" placeholder="Class code">
           <button class="primary">Join a class</button>
