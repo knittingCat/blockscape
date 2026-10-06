@@ -1,9 +1,10 @@
-# Keeps the free Render service awake by loading the home page, which does not touch the database,
-# so Neon can still sleep. Minutes are offset from :00 because GitHub drops scheduled runs at busy times.
+# Keeps the free Render service awake during the day (about 7am-9pm Pacific) by loading the home page, which does not touch the database,
+# so Neon can still sleep. At night the site sleeps. Minutes are offset from :00 because GitHub drops scheduled runs at busy times.
 name: keepalive
 on:
   schedule:
-    - cron: '3-58/5 * * * *' # every 5 minutes, at :03, :08, :13, ...
+    - cron: '3-58/5 14-23 * * *' # every 5 minutes at :03, :08, ... 7am-4pm PDT (6am-3pm PST)
+    - cron: '3-58/5 0-4 * * *' # 5pm-9pm PDT (4pm-8pm PST)
   workflow_dispatch:
 jobs:
   ping:
