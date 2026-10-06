@@ -53,7 +53,7 @@ dialog img { width: 100%; border-radius: 10px; border: 1px solid var(--line); ba
 /* ----- accounts, gallery ----- */
 #panel { width: min(520px, 94vw); max-height: 90vh; overflow: auto; }
 #panel.wide { width: min(900px, 96vw); }
-#panelBody h3 { margin: 1rem 0 .3rem; font-size: 1rem; color: var(--muted); }
+#panelBody h3 { margin: 1rem 0 .1rem; font-size: 1rem; color: var(--muted); }
 #panelBody h2 small { font-size: .7em; color: var(--muted); font-weight: 400; }
 #panelBody label { display: flex; flex-direction: column; gap: .2rem; margin: .6rem 0; color: var(--muted); font-size: .88rem; }
 #panelBody label.inline { flex-direction: row; align-items: center; gap: .5rem; }
@@ -64,7 +64,7 @@ dialog img { width: 100%; border-radius: 10px; border: 1px solid var(--line); ba
 #panelBody .center { text-align: center; }
 .error { color: var(--danger); margin: .4rem 0; }
 button.link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
-.chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: .1rem 0 .5rem; }
 .chip { border-radius: 999px; padding: .25rem .7rem; display: inline-flex; align-items: center; justify-content: center; line-height: 1.2; }
 .chip small { color: var(--muted); margin-left: .35rem; line-height: 1; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .8rem; margin: .5rem 0; }
