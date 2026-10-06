@@ -354,20 +354,20 @@ export async function initAccount(ctx) {
       const el = open(
         `<h2>${esc(c.name)}</h2>
         <p class="hint">Run by ${esc(c.owner)}. Only people in this class can see what is shared here.</p>
-        ${c.manage ? `<p>Class code: <b class="code">${esc(c.code)}</b> <button type="button" data-act="newcode">New code</button><br><small class="hint">Give this code to your students (Gallery, then Join a class).</small></p>` : ''}
+        ${c.manage ? `<p>Class code: <b class="code">${esc(c.code)}</b><br><small class="hint">Give this code to your students (Gallery, then Join a class).</small></p>` : ''}
         ${cards(c.dioramas, { takedown: c.manage })}
-        <h3>People</h3>
+        <p>People</p>
         <ul class="members">${c.members
           .map(
             (m) => `<li><span>${esc(m.username)}${m.isOwner ? ' <small class="hint">(teacher)</small>' : ''}</span>${
               c.manage && !m.isOwner
-                ? `<details class="menu"><summary aria-label="Options for ${esc(m.username)}" title="Options"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></summary><div class="menulist"><button type="button" data-transfer="${esc(m.username)}">Make teacher</button><button type="button" data-remove="${esc(m.username)}">Remove from class</button></div></details>`
+                ? `<details class="menu"><summary aria-label="Options for ${esc(m.username)}" title="Options"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></summary><div class="menulist"><button type="button" data-transfer="${esc(m.username)}">Make teacher</button><button type="button" class="danger" data-remove="${esc(m.username)}">Remove from class</button></div></details>`
                 : ''
             }</li>`,
           )
           .join('')}</ul>
         <p class="error" id="classError" hidden></p>
-        <div class="row"><button type="button" data-act="back">← Gallery</button>${c.isOwner ? '<button type="button" data-act="delete">Delete class</button>' : '<button type="button" data-act="leave">Leave class</button>'}<button type="button" class="primary" data-act="close">Close</button></div>`,
+        <div class="row"><button type="button" data-act="back">← Gallery</button>${c.isOwner ? '<button type="button" class="danger" data-act="delete">Delete class</button>' : '<button type="button" data-act="leave">Leave class</button>'}<button type="button" class="primary" data-act="close">Close</button></div>`,
         { wide: true },
       );
       wireCards(el);
@@ -395,12 +395,6 @@ export async function initAccount(ctx) {
         ctx.toast(`${b.dataset.transfer} now runs the class.`);
         classView(id);
       })));
-      const newCode = $('[data-act=newcode]', el);
-      if (newCode) newCode.onclick = run(async () => {
-        if (!confirm('Make a new code? The old code stops working for new students (people already in the class stay).')) return;
-        await api('POST', `/api/classes/${id}/code`, {});
-        classView(id);
-      });
       const del = $('[data-act=delete]', el);
       if (del) del.onclick = run(async () => {
         if (!confirm('Delete this class? Everyone is removed and the dioramas shared to it go back to being private. This cannot be undone.')) return;

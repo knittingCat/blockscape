@@ -152,3 +152,8 @@ body.clean #top, body.clean #palette, body.clean #status, body.clean #pasteBar, 
 .menulist { position: absolute; right: 0; top: 100%; z-index: 5; display: flex; flex-direction: column; gap: .2rem; min-width: 11rem; padding: .3rem; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
 .menulist button { text-align: left; border: 0; background: transparent; }
 .menulist button:hover { background: var(--panel2); }
+
+button.danger { color: var(--danger); border-color: var(--danger); }
+button.danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+.menulist button.danger { border: 0; }
+.menulist button.danger:hover { background: var(--danger); }
