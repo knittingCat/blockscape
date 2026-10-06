@@ -303,7 +303,7 @@ export async function initAccount(ctx) {
         `<h2>Gallery</h2>
         <p class="hint">Dioramas other people chose to share. Be kind — use Report if something isn't okay.</p>
         <h3>My classes</h3>
-        <div class="chips">${classes.length ? classes.map((c) => `<button class="chip" data-class="${c.id}">${esc(c.name)} <small>${c.members}</small></button>`).join('') : '<span class="hint">You are not in a class yet.</span>'}</div>
+        <div class="chips">${classes.length ? classes.map((c) => `<button class="chip" data-class="${c.id}">${esc(c.name)}${c.isOwner ? ` <small>${c.members}</small>` : ''}</button>`).join('') : '<span class="hint">You are not in a class yet.</span>'}</div>
         <form id="joinForm" class="inlineform">
           <input name="code" maxlength="12" autocomplete="off" placeholder="Class code">
           <button class="primary">Join a class</button>
