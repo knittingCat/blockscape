@@ -65,8 +65,8 @@ dialog img { width: 100%; border-radius: 10px; border: 1px solid var(--line); ba
 .error { color: var(--danger); margin: .4rem 0; }
 button.link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
 .chips { display: flex; flex-wrap: wrap; gap: .4rem; }
-.chip { border-radius: 999px; padding: .25rem .7rem; }
-.chip small { color: var(--muted); margin-left: .2rem; }
+.chip { border-radius: 999px; padding: .25rem .7rem; display: inline-flex; align-items: center; justify-content: center; line-height: 1.2; }
+.chip small { color: var(--muted); margin-left: .35rem; line-height: 1; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .8rem; margin: .5rem 0; }
 .dcard { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: .5rem; display: flex; flex-direction: column; gap: .3rem; }
 .dthumb { padding: 0; border: 0; background: var(--bg); border-radius: 8px; aspect-ratio: 16 / 10; overflow: hidden; display: grid; place-items: center; font-size: .85rem; color: var(--muted); }
