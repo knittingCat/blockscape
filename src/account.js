@@ -357,12 +357,21 @@ export async function initAccount(ctx) {
         ${c.manage ? `<p>Class code: <b class="code">${esc(c.code)}</b> <button type="button" data-act="newcode">New code</button><br><small class="hint">Give this code to your students (Gallery, then Join a class).</small></p>` : ''}
         ${cards(c.dioramas, { takedown: c.manage })}
         <h3>People <small>${c.members.length}</small></h3>
-        <div class="chips">${c.members.map((m) => `<span class="chip">${esc(m.username)}${m.isOwner ? ' (teacher)' : ''}${c.manage && !m.isOwner ? ` <button class="link" data-transfer="${esc(m.username)}" title="Make them the teacher of this class">make teacher</button> <button class="link" data-remove="${esc(m.username)}" title="Remove from the class">remove</button>` : ''}</span>`).join('')}</div>
+        <ul class="members">${c.members
+          .map(
+            (m) => `<li><span>${esc(m.username)}${m.isOwner ? ' <small class="hint">(teacher)</small>' : ''}</span>${
+              c.manage && !m.isOwner
+                ? `<details class="menu"><summary aria-label="Options for ${esc(m.username)}" title="Options"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></summary><div class="menulist"><button type="button" data-transfer="${esc(m.username)}">Make teacher</button><button type="button" data-remove="${esc(m.username)}">Remove from class</button></div></details>`
+                : ''
+            }</li>`,
+          )
+          .join('')}</ul>
         <p class="error" id="classError" hidden></p>
         <div class="row"><button type="button" data-act="back">← Gallery</button>${c.isOwner ? '<button type="button" data-act="delete">Delete class</button>' : '<button type="button" data-act="leave">Leave class</button>'}<button type="button" class="primary" data-act="close">Close</button></div>`,
         { wide: true },
       );
       wireCards(el);
+      el.addEventListener('click', (e) => el.querySelectorAll('details.menu[open]').forEach((d) => { if (!d.contains(e.target)) d.open = false; }));
       const run = (fn) => async () => {
         try {
           await fn();

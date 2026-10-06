@@ -140,3 +140,15 @@ body.viewonly #stage canvas { cursor: grab; }
 
 /* ?clean (screenshots of the starting scenes): only the 3D view */
 body.clean #top, body.clean #palette, body.clean #status, body.clean #pasteBar, body.clean #banner, body.clean #toast { display: none !important; }
+
+.members { list-style: none; margin: .2rem 0 .6rem; padding: 0; }
+.members li { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .35rem .6rem; border-bottom: 1px solid var(--line); }
+.members li:last-child { border-bottom: 0; }
+.menu { position: relative; }
+.menu summary { list-style: none; cursor: pointer; display: flex; align-items: center; padding: .25rem .4rem; border-radius: 8px; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu summary:hover, .menu[open] summary { background: var(--panel2); }
+.menu summary svg { width: 1.1rem; height: 1.1rem; fill: currentColor; }
+.menulist { position: absolute; right: 0; top: 100%; z-index: 5; display: flex; flex-direction: column; gap: .2rem; min-width: 11rem; padding: .3rem; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+.menulist button { text-align: left; border: 0; background: transparent; }
+.menulist button:hover { background: var(--panel2); }
