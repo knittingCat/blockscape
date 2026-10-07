@@ -423,6 +423,52 @@ try {
     await ann.call('DELETE', `/api/classes/${cls.id}`);
   });
 
+  await test('live editing: only people allowed to edit join; edits are passed on; access loss disconnects', async () => {
+    const { default: WebSocket } = await import('ws');
+    const port = server.address().port;
+    const until = async (fn) => {
+      for (let i = 0; i < 100 && !fn(); i++) await new Promise((r) => setTimeout(r, 30));
+      assert.ok(fn(), 'timed out waiting');
+    };
+    const join = (client, id) =>
+      new Promise((resolve, reject) => {
+        const w = new WebSocket(`ws://127.0.0.1:${port}/ws?d=${id}`, { headers: { cookie: client.cookie } });
+        w.msgs = [];
+        w.on('message', (m) => w.msgs.push(JSON.parse(m)));
+        w.on('open', () => resolve(w));
+        w.on('error', reject);
+        w.on('unexpected-response', (_, res) => reject(new Error('status ' + res.statusCode)));
+      });
+    const cls = (await ann.call('POST', '/api/classes', { name: 'Live club' })).json;
+    await ben.call('POST', '/api/classes/join', { code: cls.code });
+    const id = (await ann.call('POST', '/api/dioramas', { title: 'Live build', data: DATA, visibility: 'class', classId: cls.id })).json.id;
+    // editing switched off: nobody joins, not even the owner
+    await assert.rejects(join(ann, id), /403/);
+    await ann.call('POST', '/api/dioramas', { id, title: 'Live build', data: DATA, visibility: 'class', classId: cls.id, classEdit: true, explicit: true });
+    await assert.rejects(join(new Client(), id), /403/); // not signed in
+    await assert.rejects(join(cat, id), /403/); // not in the class
+    const a = await join(ann, id);
+    const b = await join(ben, id);
+    await until(() => b.msgs.some((m) => m.t === 'peers' && m.names.length === 2));
+    // a newcomer is offered the longest-present person's copy
+    await until(() => a.msgs.some((m) => m.t === 'want'));
+    // edits reach the others, not the sender
+    a.send(JSON.stringify({ t: 'cells', c: [[5, 3]] }));
+    await until(() => b.msgs.some((m) => m.t === 'cells' && m.c[0][1] === 3));
+    assert.equal(a.msgs.some((m) => m.t === 'cells'), false);
+    // junk is dropped
+    a.send('not json');
+    a.send(JSON.stringify({ t: 'bogus' }));
+    b.send(JSON.stringify({ t: 'labels', labels: [] }));
+    await until(() => a.msgs.some((m) => m.t === 'labels'));
+    // the owner turns editing off: Ben is disconnected
+    const closed = new Promise((r) => b.on('close', r));
+    await ann.call('POST', '/api/dioramas', { id, title: 'Live build', data: DATA, visibility: 'private', explicit: true });
+    assert.equal(await closed, 4403);
+    a.close();
+    await ann.call('DELETE', `/api/classes/${cls.id}`);
+  });
+
   await test('brute-force protection on login', async () => {
     const attacker = new Client();
     let last;

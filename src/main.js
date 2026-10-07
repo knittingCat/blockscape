@@ -4,6 +4,7 @@ import { textureCanvas, topTextureName } from './textures.js';
 import { DioramaView } from './view.js';
 import { initAccount } from './account.js';
 import { api } from './api.js';
+import { createLive } from './live.js';
 import { extract, rotate90, mirrorX, originFor, placement, symmetricCells } from './clipboard.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -132,6 +133,27 @@ let symmetry = 'off'; // build symmetrically: every place/erase/box is repeated 
 let localState = ''; // browser autosave: Saving… / Saved in this browser
 let cloudState = ''; // shown in the status line: Saving… / Saved / …
 let cloudTimer = null;
+let livePeers = []; // other people editing this diorama right now
+const live = createLive({
+  getWorld: () => world,
+  encode: (w) => encodeWorld(w),
+  onPeers: (names) => {
+    livePeers = names;
+    updateStatus();
+  },
+  // someone already editing has a newer copy than the one we loaded: take it
+  onState: (text) => loadFromText(text, { cloud }),
+  onLost: () => {
+    toast('Live editing stopped. You may no longer be allowed to edit this diorama.', 6000);
+  },
+});
+
+// Live editing is on while a class diorama that allows class editing is open for you to edit.
+function syncLive() {
+  const on = cloud && cloud.mine && cloud.visibility === 'class' && cloud.classEdit && !sharedMode && accountApi && accountApi.isSignedIn();
+  if (on) live.connect(cloud.id);
+  else live.disconnect();
+}
 let accountApi = null;
 
 const stage = $('#stage');
@@ -204,6 +226,7 @@ function cycleSymmetry() {
 // What to show about saving, so there is always some feedback.
 function saveSuffix() {
   if (cloud && !cloud.mine) return 'viewing someone else\'s diorama (not saved)';
+  if (livePeers.length) return `${cloudState ? cloudState + ' · ' : ''}editing live with ${livePeers.join(', ')}`;
   if (cloudState) return cloudState;
   if (!accountApi) return localState;
   if (!accountApi.isSignedIn()) return `${localState ? localState + ' · ' : ''}sign in to save to your account`;
@@ -223,8 +246,9 @@ function updateStatus() {
 
 // ---------- world wiring ----------
 let saveTimer;
-function scheduleSave() {
-  scheduleCloudSave();
+function scheduleSave(remote = false) {
+  if (!remote) scheduleCloudSave(); // whoever made the change saves it; the others just keep their own copy current
+
   localState = 'Saving…';
   updateStatus();
   clearTimeout(saveTimer);
@@ -278,6 +302,7 @@ async function doCloudSave() {
       rememberCloud();
       updateBanner(sharedMode);
       setCloudState('');
+      syncLive();
       toast('Autosave to your account stopped (sign in again and press Save).');
     } else {
       setCloudState('Could not save online — retrying on your next change');
@@ -288,9 +313,10 @@ async function doCloudSave() {
 
 function attachWorld(w) {
   world = w;
-  world.onChange(() => {
+  world.onChange((e) => {
     updateStatus();
-    scheduleSave();
+    scheduleSave(!!(e && e.remote));
+    live.send(e);
   });
   $$('[data-sky]').forEach((b) => b.classList.toggle('active', b.dataset.sky === (world.meta.sky || 'day')));
   updateStatus();
@@ -345,6 +371,7 @@ async function loadFromText(text, { shared = false, cloud: cloudInfo = null, res
   if (!shared && cloudInfo) rememberCloud();
   setTool(tool);
   updateBanner(shared);
+  syncLive();
 }
 
 // ---------- people ----------
@@ -1154,6 +1181,7 @@ async function main() {
       rememberCloud();
       updateBanner(sharedMode);
       updateStatus();
+      syncLive();
     },
   });
   if (!cloud && !sharedMode && accountApi && accountApi.isSignedIn()) {
@@ -1162,6 +1190,7 @@ async function main() {
       if (saved && saved.id) {
         cloud = { ...saved, mine: true };
         cloudState = 'Autosaving to your account';
+        syncLive();
       }
     } catch {}
   }

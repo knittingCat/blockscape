@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initDb, query, T } from './db.js';
+import { attachLive } from './live.js';
 import { hashSecret, verifySecret, sha256, newToken, checkUsername, checkPassword, rateLimiter } from './auth.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -68,6 +69,25 @@ async function countReports(user) {
   return rows[0].n;
 }
 
+async function userFromRequest(req) {
+  const token = readCookie(req, COOKIE);
+  if (!token) return null;
+  const { rows } = await query(
+    `SELECT u.* FROM ${T.sessions} s JOIN ${T.users} u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > NOW()`,
+    [sha256(token)],
+  );
+  return rows[0] || null;
+}
+
+// Who may edit a diorama together with others: its owner, or a member of its class once the owner switched editing on.
+async function canLiveEdit(userId, dioramaId) {
+  const { rows } = await query(`SELECT owner_id, visibility, class_id, class_edit FROM ${T.dioramas} WHERE id = $1`, [dioramaId]);
+  const d = rows[0];
+  if (!d || d.visibility !== 'class' || !d.class_edit || !d.class_id) return false;
+  if (d.owner_id === userId) return true;
+  return (await query(`SELECT 1 FROM ${T.members} WHERE class_id = $1 AND user_id = $2`, [d.class_id, userId])).rowCount > 0;
+}
+
 export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
@@ -81,6 +101,14 @@ export function createApp() {
     next();
   });
   app.use(express.json({ limit: '400kb' }));
+  // live editing runs on the same server: wrap listen() so the socket handler is attached to whatever it starts
+  let live = null;
+  const listen = app.listen.bind(app);
+  app.listen = (...args) => {
+    const server = listen(...args);
+    live = attachLive(server, { authenticate: userFromRequest, canEdit: canLiveEdit });
+    return server;
+  };
 
   // --- who is asking? ---
   app.use('/api', wrap(async (req, res, next) => {
@@ -90,14 +118,7 @@ export function createApp() {
     }
     res.setHeader('Cache-Control', 'no-store');
     req.user = null;
-    const token = readCookie(req, COOKIE);
-    if (token) {
-      const { rows } = await query(
-        `SELECT u.* FROM ${T.sessions} s JOIN ${T.users} u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > NOW()`,
-        [sha256(token)],
-      );
-      req.user = rows[0] || null;
-    }
+    req.user = await userFromRequest(req);
     next();
   }));
   const needUser = (req, res, next) => (req.user ? next() : bad(res, 401, 'Please sign in first.'));
@@ -313,6 +334,7 @@ export function createApp() {
     if (!c) return;
     if (!c.isOwner && !req.user.is_admin) return bad(res, 403, 'Only the person who runs the class can take a diorama down.');
     await query(`UPDATE ${T.dioramas} SET visibility = 'private', class_id = NULL WHERE id = $1 AND class_id = $2`, [Number(req.body.dioramaId), c.id]);
+    if (live) live.recheck(Number(req.body.dioramaId));
     res.json({ ok: true });
   }));
 
@@ -375,6 +397,7 @@ export function createApp() {
       }
       params.push(id);
       await query(`UPDATE ${T.dioramas} SET ${sets.join(', ')} WHERE id = $${params.length}`, params);
+      if (live) live.recheck(id);
       if (code !== undefined) await query(`DELETE FROM ${T.unlocks} WHERE kind = 'diorama' AND target_id = $1`, [id]);
       return res.json({ id });
     }
