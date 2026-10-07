@@ -101,8 +101,10 @@ export async function initAccount(ctx) {
     const world = ctx.getWorld();
     const cloud = ctx.getCloud();
     const updating = cloud && cloud.mine;
+    const collab = updating && cloud.isOwner === false; // a classmate editing someone else's diorama
     const { classes } = await api('GET', '/api/classes').catch(() => ({ classes: [] }));
     const inClass = updating && cloud.visibility === 'class';
+    if (collab) return collabSaveView(world, cloud);
     const el = open(`
       <h2>${updating ? 'Save changes' : 'Save to your account'}</h2>
       <form id="saveForm">
@@ -112,7 +114,8 @@ export async function initAccount(ctx) {
           <label class="inline"><input type="radio" name="vis" value="private" ${updating && (cloud.visibility === 'gallery' || inClass) ? '' : 'checked'}> Only me</label>
           <label class="inline"><input type="radio" name="vis" value="gallery" ${updating && cloud.visibility === 'gallery' ? 'checked' : ''}> In my gallery (everyone signed in can look)</label>
           ${classes.length ? `<label class="inline"><input type="radio" name="vis" value="class" ${inClass ? 'checked' : ''}> In a class gallery (only that class can look):
-            <select name="classId">${classes.map((c) => `<option value="${c.id}" ${inClass && cloud.classId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : ''}
+            <select name="classId">${classes.map((c) => `<option value="${c.id}" ${inClass && cloud.classId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+          <label class="inline"><input type="checkbox" name="classEdit" ${inClass && cloud.classEdit ? 'checked' : ''}> Let people in that class edit it too (only if you chose a class above)</label>` : ''}
         </fieldset>
         <label>Optional: a code people must enter to open this diorama
           <input name="code" maxlength="40" autocomplete="off" placeholder="${updating && cloud.hasCode ? 'Leave blank to keep the current code' : 'Leave blank for no code'}">
@@ -139,6 +142,7 @@ export async function initAccount(ctx) {
         visibility: f.get('vis'),
         explicit: true, // choosing who can see it (autosave never changes that)
         classId: f.get('vis') === 'class' ? Number(f.get('classId')) : undefined,
+        classEdit: f.get('vis') === 'class' && f.get('classEdit') === 'on',
       };
       if (code) payload.code = code;
       else if (f.get('clearCode')) payload.code = '';
@@ -146,8 +150,39 @@ export async function initAccount(ctx) {
       try {
         const res = await api('POST', '/api/dioramas', payload);
         world.meta.title = payload.title;
-        ctx.setCloud({ id: res.id, title: payload.title, mine: true, visibility: payload.visibility, classId: payload.classId, hasCode: !!code || (updating && cloud.hasCode && !f.get('clearCode')) });
+        ctx.setCloud({ id: res.id, title: payload.title, mine: true, isOwner: true, visibility: payload.visibility, classId: payload.classId, classEdit: payload.classEdit, hasCode: !!code || (updating && cloud.hasCode && !f.get('clearCode')) });
         ctx.toast(payload.visibility === 'gallery' ? 'Saved — it is in your gallery.' : payload.visibility === 'class' ? 'Saved — shared with your class.' : 'Saved to your account.');
+        close();
+      } catch (err) {
+        for (const b of el.querySelectorAll('button')) b.disabled = false;
+        fail($('#saveError', el), err);
+      }
+    };
+  }
+
+  // A classmate's save: the title and the scene only. Who can see it, and its code, stay with the owner.
+  function collabSaveView(world, cloud) {
+    const el = open(`
+      <h2>Save changes</h2>
+      <p>${esc(cloud.owner)} let your class edit this diorama. Your changes are saved for everyone in the class, and replace what is there now.</p>
+      <form id="saveForm">
+        <label>Title <input name="title" maxlength="80" required value="${esc(cloud.title)}"></label>
+        <p class="error" id="saveError" hidden></p>
+        <div class="row">
+          <button type="button" data-act="close">Cancel</button>
+          <button type="submit" class="primary">Save changes</button>
+        </div>
+      </form>`);
+    $('[data-act=close]', el).onclick = close;
+    $('#saveForm', el).onsubmit = async (e) => {
+      e.preventDefault();
+      const title = new FormData(e.target).get('title');
+      for (const b of el.querySelectorAll('button')) b.disabled = true;
+      try {
+        await api('POST', '/api/dioramas', { id: cloud.id, title, data: await encodeWorld(world), thumb: ctx.makeThumb() });
+        world.meta.title = title;
+        ctx.setCloud({ ...cloud, title });
+        ctx.toast('Saved for your class.');
         close();
       } catch (err) {
         for (const b of el.querySelectorAll('button')) b.disabled = false;
@@ -160,7 +195,7 @@ export async function initAccount(ctx) {
   async function openDiorama(id) {
     try {
       const d = await api('GET', `/api/dioramas/${id}`);
-      await ctx.loadScene(d.data, { shared: !d.mine, cloud: { id: d.id, title: d.title, owner: d.owner, mine: d.mine, visibility: d.visibility } });
+      await ctx.loadScene(d.data, { shared: !d.mine, cloud: { id: d.id, title: d.title, owner: d.owner, mine: d.mine, isOwner: d.isOwner, visibility: d.visibility, classId: d.classId, classEdit: d.classEdit } });
       close();
     } catch (err) {
       if (err.data && err.data.locked === 'gallery') return unlockView({ kind: 'gallery', id: err.data.ownerId, owner: err.data.owner, then: () => openDiorama(id) });

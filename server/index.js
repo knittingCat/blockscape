@@ -326,29 +326,48 @@ export function createApp() {
     if (typeof data !== 'string' || data.length > 250000 || !DATA_RE.test(data)) return bad(res, 400, 'That diorama could not be saved.');
     if (thumb != null && (typeof thumb !== 'string' || thumb.length > 90000 || !thumb.startsWith('data:image/jpeg;base64,'))) return bad(res, 400, 'Bad picture.');
     let classId = null;
-    if (id != null && req.body.explicit !== true) {
-      // autosave: keep whoever it is shared with (a teacher may have taken it down, or the author left the class)
-      const { rows: cur } = await query(`SELECT owner_id, visibility, class_id FROM ${T.dioramas} WHERE id = $1`, [id]);
-      if (!cur[0] || cur[0].owner_id !== req.user.id) return bad(res, 404, 'Diorama not found.');
-      visibility = cur[0].visibility;
-      classId = cur[0].class_id;
+    let classEdit = false;
+    let collaborator = false;
+    let current = null;
+    if (id != null) {
+      const { rows: cur } = await query(`SELECT owner_id, visibility, class_id, class_edit FROM ${T.dioramas} WHERE id = $1`, [id]);
+      current = cur[0];
+      if (!current) return bad(res, 404, 'Diorama not found.');
+      if (current.owner_id !== req.user.id) {
+        // not the owner: allowed only while it is shared with a class the person is in, with editing switched on
+        const canEdit = current.class_edit && current.visibility === 'class' && current.class_id && (await isMember(req.user.id, current.class_id));
+        if (!canEdit) return bad(res, 404, 'Diorama not found.');
+        collaborator = true;
+      }
+    }
+    if (current && (collaborator || req.body.explicit !== true)) {
+      // autosave (or a classmate's save): keep whoever it is shared with (a teacher may have taken it down, or the author left the class)
+      visibility = current.visibility;
+      classId = current.class_id;
+      classEdit = current.class_edit;
     } else {
       if (!['private', 'gallery', 'class'].includes(visibility)) return bad(res, 400, 'Choose private, gallery or a class.');
       if (visibility === 'class') {
         classId = Number(req.body.classId);
         if (!Number.isInteger(classId) || !(await isMember(req.user.id, classId))) return bad(res, 400, 'Choose one of your classes.');
+        classEdit = req.body.classEdit === true;
       }
     }
     const code = req.body.code;
     if (code != null && code !== '' && (typeof code !== 'string' || code.length < 3 || code.length > 40)) return bad(res, 400, 'A code is 3–40 characters.');
 
+    if (id != null && collaborator) {
+      // classmates change the picture only: sharing and codes stay with the owner
+      await query(`UPDATE ${T.dioramas} SET title = $1, data = $2, thumb = $3, updated_at = NOW() WHERE id = $4`, [title, data, thumb || null, id]);
+      return res.json({ id });
+    }
     if (id != null) {
-      const { rows } = await query(`SELECT owner_id FROM ${T.dioramas} WHERE id = $1`, [id]);
-      if (!rows[0] || rows[0].owner_id !== req.user.id) return bad(res, 404, 'Diorama not found.');
       const sets = ['title = $1', 'data = $2', 'thumb = $3', 'visibility = $4', 'updated_at = NOW()'];
       const params = [title, data, thumb || null, visibility];
       params.push(classId);
       sets.push(`class_id = $${params.length}`);
+      params.push(classEdit);
+      sets.push(`class_edit = $${params.length}`);
       if (code === '' || code === null) sets.push('code_hash = NULL');
       else if (code !== undefined) {
         params.push(await hashSecret(code));
@@ -363,18 +382,18 @@ export function createApp() {
     if (cnt[0].n >= MAX_DIORAMAS_PER_USER) return bad(res, 400, `You can keep up to ${MAX_DIORAMAS_PER_USER} dioramas. Delete one first.`);
     const codeHash = code ? await hashSecret(code) : null;
     const { rows } = await query(
-      `INSERT INTO ${T.dioramas} (owner_id, title, data, thumb, visibility, code_hash, class_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [req.user.id, title, data, thumb || null, visibility, codeHash, classId],
+      `INSERT INTO ${T.dioramas} (owner_id, title, data, thumb, visibility, code_hash, class_id, class_edit) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [req.user.id, title, data, thumb || null, visibility, codeHash, classId, classEdit],
     );
     res.json({ id: rows[0].id });
   }));
 
   app.get('/api/dioramas/mine', needUser, wrap(async (req, res) => {
     const { rows } = await query(
-      `SELECT d.id, d.title, d.thumb, d.visibility, d.class_id, c.name AS class_name, (d.code_hash IS NOT NULL) AS has_code, d.updated_at FROM ${T.dioramas} d LEFT JOIN ${T.classes} c ON c.id = d.class_id WHERE d.owner_id = $1 ORDER BY d.updated_at DESC`,
+      `SELECT d.id, d.title, d.thumb, d.visibility, d.class_id, d.class_edit, c.name AS class_name, (d.code_hash IS NOT NULL) AS has_code, d.updated_at FROM ${T.dioramas} d LEFT JOIN ${T.classes} c ON c.id = d.class_id WHERE d.owner_id = $1 ORDER BY d.updated_at DESC`,
       [req.user.id],
     );
-    res.json({ dioramas: rows.map((r) => ({ id: r.id, title: r.title, thumb: r.thumb, visibility: r.visibility, classId: r.class_id, className: r.class_name, hasCode: r.has_code, updatedAt: r.updated_at })) });
+    res.json({ dioramas: rows.map((r) => ({ id: r.id, title: r.title, thumb: r.thumb, visibility: r.visibility, classId: r.class_id, classEdit: r.class_edit, className: r.class_name, hasCode: r.has_code, updatedAt: r.updated_at })) });
   }));
 
   const unlocked = async (userId, kind, target) =>
@@ -416,7 +435,9 @@ export function createApp() {
       if (d.gallery_hash && !(await unlocked(req.user.id, 'gallery', d.owner_id))) return bad(res, 403, 'This gallery needs a code.', { locked: 'gallery', ownerId: d.owner_id, owner: d.username });
       if (d.code_hash && !(await unlocked(req.user.id, 'diorama', d.id))) return bad(res, 403, 'This diorama needs a code.', { locked: 'diorama', id: d.id, owner: d.username });
     }
-    res.json({ id: d.id, title: d.title, data: d.data, owner: d.username, visibility: d.visibility, classId: d.class_id, mine });
+    // classmates can edit when the owner switched that on; `mine` means "you can edit and autosave it"
+    const editable = !mine && classMember && d.class_edit;
+    res.json({ id: d.id, title: d.title, data: d.data, owner: d.username, visibility: d.visibility, classId: d.class_id, classEdit: d.class_edit, mine: mine || editable, isOwner: mine });
   }));
 
   app.delete('/api/dioramas/:id', needUser, wrap(async (req, res) => {

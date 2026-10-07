@@ -99,6 +99,8 @@ export async function initDb() {
       PRIMARY KEY (class_id, user_id)
     );
     ALTER TABLE ${T.dioramas} ADD COLUMN IF NOT EXISTS class_id INTEGER REFERENCES ${T.classes}(id) ON DELETE SET NULL;
+    -- the owner can let everyone in the class edit a diorama shared with that class
+    ALTER TABLE ${T.dioramas} ADD COLUMN IF NOT EXISTS class_edit BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 
   // Case-insensitive uniqueness ("Ann" and "ann" are the same person). Not fatal if old data already clashes.

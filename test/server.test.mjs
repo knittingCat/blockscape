@@ -392,6 +392,37 @@ try {
     assert.equal((await ann.call('GET', '/api/classes')).json.classes.length, 0);
   });
 
+  await test('class editing: owner can let classmates edit; they change the scene only, and only while it stays shared', async () => {
+    const cls = (await ann.call('POST', '/api/classes', { name: 'Edit club' })).json;
+    await ben.call('POST', '/api/classes/join', { code: cls.code });
+    const made = await ann.call('POST', '/api/dioramas', { title: 'Shared build', data: DATA, visibility: 'class', classId: cls.id });
+    const id = made.json.id;
+    // editing is off by default: Ben can look but not save
+    const before = await ben.call('GET', `/api/dioramas/${id}`);
+    assert.equal(before.json.mine, false);
+    assert.equal((await ben.call('POST', '/api/dioramas', { id, title: 'Ben edit', data: DATA })).status, 404);
+    // Ann switches it on
+    assert.equal((await ann.call('POST', '/api/dioramas', { id, title: 'Shared build', data: DATA, visibility: 'class', classId: cls.id, classEdit: true, explicit: true })).status, 200);
+    const open = await ben.call('GET', `/api/dioramas/${id}`);
+    assert.equal(open.json.mine, true);
+    assert.equal(open.json.isOwner, false);
+    // Ben saves; trying to change sharing is ignored
+    assert.equal((await ben.call('POST', '/api/dioramas', { id, title: 'Ben edit', data: DATA, visibility: 'gallery', explicit: true, code: 'steal' })).status, 200);
+    const after = await ann.call('GET', `/api/dioramas/${id}`);
+    assert.equal(after.json.title, 'Ben edit');
+    assert.equal(after.json.visibility, 'class');
+    assert.equal(after.json.classEdit, true);
+    assert.equal(after.json.isOwner, true);
+    // someone outside the class cannot
+    assert.equal((await cat.call('POST', '/api/dioramas', { id, title: 'Cat edit', data: DATA })).status, 404);
+    // Ann's own autosave keeps the setting; moving it out of the class turns editing off
+    assert.equal((await ann.call('POST', '/api/dioramas', { id, title: 'Ben edit', data: DATA })).status, 200);
+    assert.equal((await ben.call('POST', '/api/dioramas', { id, title: 'again', data: DATA })).status, 200);
+    assert.equal((await ann.call('POST', '/api/dioramas', { id, title: 'Ben edit', data: DATA, visibility: 'private', explicit: true })).status, 200);
+    assert.equal((await ben.call('POST', '/api/dioramas', { id, title: 'late', data: DATA })).status, 404);
+    await ann.call('DELETE', `/api/classes/${cls.id}`);
+  });
+
   await test('brute-force protection on login', async () => {
     const attacker = new Client();
     let last;
