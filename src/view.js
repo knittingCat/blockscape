@@ -26,6 +26,7 @@ export class DioramaView {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.autoUpdate = false; // the sun is fixed: redraw shadows only when the scene changes, not on every camera move
     container.appendChild(this.renderer.domElement);
     this.canvas = this.renderer.domElement;
 
@@ -36,6 +37,19 @@ export class DioramaView {
     this.controls.dampingFactor = 0.12;
     this.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
     this.controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+    // Smooth zoom: wheel events add to a goal distance and the loop eases the camera toward it
+    // (OrbitControls applies each wheel event instantly, which feels jumpy).
+    this.zoomGoal = null;
+    container.addEventListener('wheel', (e) => { // capture phase: runs before OrbitControls' own wheel handler (pinch still uses it)
+      if (e.target !== this.canvas || this.looking || this.flying || !this.controls.enabled) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const d = this.camera.position.distanceTo(this.controls.target);
+      const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+      const step = Math.max(-120, Math.min(120, dy)); // one notch or one trackpad burst, never a leap
+      const base = this.zoomGoal ?? d;
+      this.zoomGoal = Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, base * Math.pow(0.95, -step * 0.01)));
+    }, { passive: false, capture: true });
     this.controls.maxPolarAngle = Math.PI / 2 - 0.03;
     this.controls.autoRotateSpeed = 1.6;
 
@@ -1228,8 +1242,17 @@ export class DioramaView {
     t.y = Math.max(0, Math.min(this.world.height, t.y));
     if (this.flowWaiting) this.updateFlowReveal();
     if (this.flying) this.updateFly();
-    const moved = this.looking || this.flying ? false : this.controls.update(); // the camera is driven by the person view / fly mode
+    let eased = false;
+    if (this.zoomGoal != null && !this.looking && !this.flying) {
+      const off = this.camera.position.clone().sub(t);
+      const d = off.length();
+      const nd = d + (this.zoomGoal - d) * 0.2;
+      if (Math.abs(this.zoomGoal - d) < 0.01) this.zoomGoal = null;
+      else { this.camera.position.copy(t).add(off.setLength(nd)); eased = true; }
+    } else this.zoomGoal = null;
+    const moved = this.looking || this.flying ? false : this.controls.update() || eased; // the camera is driven by the person view / fly mode
     if (moved || this.dirty) {
+      if (this.dirty) this.renderer.shadowMap.needsUpdate = true;
       this.dirty = false;
       this.renderer.render(this.scene, this.camera);
     }
@@ -1248,6 +1271,7 @@ export class DioramaView {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.renderer.shadowMap.needsUpdate = true;
     this.renderer.render(this.scene, this.camera);
     const out = document.createElement('canvas');
     out.width = width;
