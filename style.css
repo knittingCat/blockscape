@@ -157,3 +157,5 @@ button.danger { color: var(--danger); border-color: var(--danger); }
 button.danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
 .menulist button.danger { border: 0; }
 .menulist button.danger:hover { background: var(--danger); }
+#panelBody select, #panelBody textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .6rem; color: var(--text); width: 100%; font: inherit; }
+#panelBody textarea { resize: vertical; }

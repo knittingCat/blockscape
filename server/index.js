@@ -563,6 +563,31 @@ export function createApp() {
     res.json({ ok: true });
   }));
 
+  // --- feature requests and error reports (from the gallery) ---
+  app.post('/api/feedback', needUser, rateLimiter({ windowMs: 3600e3, max: 10 }), wrap(async (req, res) => {
+    const kind = req.body.kind;
+    const message = String(req.body.message || '').trim().slice(0, 1000);
+    if (!['feature', 'error'].includes(kind)) return bad(res, 400, 'Choose feature request or error.');
+    if (!message) return bad(res, 400, 'Please write a few words.');
+    await query(`INSERT INTO ${T.feedback} (kind, message, user_id) VALUES ($1,$2,$3)`, [kind, message, req.user.id]);
+    res.json({ ok: true });
+  }));
+
+  app.get('/api/feedback', needUser, wrap(async (req, res) => {
+    if (!req.user.is_admin) return bad(res, 403, 'Only admins can read feedback.');
+    const { rows } = await query(
+      `SELECT f.id, f.kind, f.message, f.created_at, u.username FROM ${T.feedback} f LEFT JOIN ${T.users} u ON u.id = f.user_id WHERE f.status = 'open' ORDER BY f.created_at`,
+    );
+    res.json({ feedback: rows.map((r) => ({ id: r.id, kind: r.kind, message: r.message, createdAt: r.created_at, from: r.username || 'a deleted account' })) });
+  }));
+
+  app.post('/api/feedback/:id/done', needUser, wrap(async (req, res) => {
+    if (!req.user.is_admin) return bad(res, 403, 'Only admins can handle feedback.');
+    const r = await query(`UPDATE ${T.feedback} SET status = 'done', handled_at = NOW() WHERE id = $1 AND status = 'open'`, [Number(req.params.id)]);
+    if (!r.rowCount) return bad(res, 404, 'Not found.');
+    res.json({ ok: true });
+  }));
+
   // --- reviewing reports ---
   app.get('/api/reports', needUser, wrap(async (req, res) => {
     const me = Number(req.user.id);

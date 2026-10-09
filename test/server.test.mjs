@@ -322,6 +322,23 @@ try {
     assert.equal((await ben.call('GET', '/api/reports')).json.reports.length, 0); // non-admins see nothing
   });
 
+  await test('feedback: signed-in people send feature requests and errors; only admins read and close them', async () => {
+    assert.equal((await new Client().call('POST', '/api/feedback', { kind: 'feature', message: 'x' })).status, 401);
+    assert.equal((await ben.call('POST', '/api/feedback', { kind: 'bogus', message: 'x' })).status, 400);
+    assert.equal((await ben.call('POST', '/api/feedback', { kind: 'error', message: '  ' })).status, 400);
+    assert.equal((await ben.call('POST', '/api/feedback', { kind: 'feature', message: 'Add doors' })).status, 200);
+    assert.equal((await ben.call('POST', '/api/feedback', { kind: 'error', message: 'Save failed' })).status, 200);
+    assert.equal((await ben.call('GET', '/api/feedback')).status, 403);
+    const dee = new Client();
+    assert.equal((await dee.call('POST', '/api/login', { username: 'dee_admin', password: 'longenough4' })).status, 200);
+    const list = await dee.call('GET', '/api/feedback');
+    assert.equal(list.json.feedback.length, 2);
+    assert.deepEqual(list.json.feedback.map((f) => f.kind), ['feature', 'error']);
+    assert.equal((await ben.call('POST', `/api/feedback/${list.json.feedback[0].id}/done`)).status, 403);
+    assert.equal((await dee.call('POST', `/api/feedback/${list.json.feedback[0].id}/done`)).status, 200);
+    assert.equal((await dee.call('GET', '/api/feedback')).json.feedback.length, 1);
+  });
+
   await test('class galleries: create, join with the code, share to a class, members only, teacher reviews and takes down', async () => {
     const made = await ann.call('POST', '/api/classes', { name: 'Period 3 English' });
     assert.equal(made.status, 200);

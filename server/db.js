@@ -4,7 +4,7 @@ import pg from 'pg';
 // TABLE_PREFIX lets the automated tests use their own throw-away tables in the same database.
 export const PREFIX = process.env.TABLE_PREFIX || '';
 const t = (name) => `${PREFIX}${name}`;
-export const T = { users: t('users'), sessions: t('sessions'), dioramas: t('dioramas'), unlocks: t('unlocks'), reports: t('reports'), classes: t('classes'), members: t('class_members') };
+export const T = { users: t('users'), sessions: t('sessions'), dioramas: t('dioramas'), unlocks: t('unlocks'), reports: t('reports'), classes: t('classes'), members: t('class_members'), feedback: t('feedback') };
 
 function connectionString() {
   const raw = process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL;
@@ -101,6 +101,16 @@ export async function initDb() {
     ALTER TABLE ${T.dioramas} ADD COLUMN IF NOT EXISTS class_id INTEGER REFERENCES ${T.classes}(id) ON DELETE SET NULL;
     -- the owner can let everyone in the class edit a diorama shared with that class
     ALTER TABLE ${T.dioramas} ADD COLUMN IF NOT EXISTS class_edit BOOLEAN NOT NULL DEFAULT FALSE;
+    -- feature requests and error reports sent from the gallery; admins (the Claude account) read them
+    CREATE TABLE IF NOT EXISTS ${T.feedback} (
+      id SERIAL PRIMARY KEY,
+      kind TEXT NOT NULL,
+      message TEXT NOT NULL,
+      user_id INTEGER REFERENCES ${T.users}(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      handled_at TIMESTAMPTZ
+    );
   `);
 
   // Case-insensitive uniqueness ("Ann" and "ann" are the same person). Not fatal if old data already clashes.
@@ -113,5 +123,5 @@ export async function initDb() {
 
 export async function dropAll() {
   if (!PREFIX) throw new Error('refusing to drop tables without TABLE_PREFIX');
-  await query(`DROP TABLE IF EXISTS ${T.reports}, ${T.unlocks}, ${T.members}, ${T.dioramas}, ${T.classes}, ${T.sessions}, ${T.users} CASCADE`);
+  await query(`DROP TABLE IF EXISTS ${T.feedback}, ${T.reports}, ${T.unlocks}, ${T.members}, ${T.dioramas}, ${T.classes}, ${T.sessions}, ${T.users} CASCADE`);
 }

@@ -349,9 +349,10 @@ export async function initAccount(ctx) {
         <div class="chips">${g.members.length ? g.members.map((m) => `<button class="chip" data-user="${esc(m.username)}">${m.locked ? '[Locked] ' : ''}${esc(m.username)} <small>${m.count}</small></button>`).join('') : '<span class="hint">No one has shared anything yet.</span>'}</div>
         <h3>Newest</h3>
         ${cards(g.recent)}
-        <div class="row"><button type="button" class="primary" data-act="close">Close</button></div>`,
+        <div class="row"><button type="button" data-act="feedback">Request a feature or report an error</button><button type="button" class="primary" data-act="close">Close</button></div>`,
         { wide: true },
       );
+      $('[data-act=feedback]', el).onclick = feedbackView;
       wireCards(el);
       el.querySelectorAll('[data-class]').forEach((b) => (b.onclick = () => classView(Number(b.dataset.class))));
       $('#joinForm', el).onsubmit = async (e) => {
@@ -533,6 +534,30 @@ export async function initAccount(ctx) {
   }
 
   // ---------- report ----------
+  function feedbackView() {
+    const el = open(`
+      <h2>Request a feature or report an error</h2>
+      <p class="hint">Tell the developer what you would like, or what went wrong.</p>
+      <form id="feedbackForm">
+        <label>What is it? <select name="kind"><option value="feature">I want a new feature</option><option value="error">Something is broken</option></select></label>
+        <label>Details <textarea name="message" rows="5" maxlength="1000" required></textarea></label>
+        <p class="error" id="feedbackError" hidden></p>
+        <div class="row"><button type="button" data-act="back">Back</button><button type="submit" class="primary">Send</button></div>
+      </form>`);
+    $('[data-act=back]', el).onclick = galleryView;
+    $('#feedbackForm', el).onsubmit = async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      try {
+        await api('POST', '/api/feedback', { kind: f.get('kind'), message: f.get('message') });
+        ctx.toast('Thanks — it was sent.');
+        galleryView();
+      } catch (err) {
+        fail($('#feedbackError', el), err);
+      }
+    };
+  }
+
   function reportView(id, title) {
     const el = open(`
       <h2>Report</h2>
