@@ -782,7 +782,7 @@ export class DioramaView {
   // Nothing is written to the person until exitPerson() hands back the final state.
   enterPerson(p) {
     const entry = this.personGroups.get(p.id);
-    if (!entry || this.looking) return false;
+    if (!entry || this.looking || this.flying) return false;
     this.saved = { pos: this.camera.position.clone(), target: this.controls.target.clone(), fov: this.camera.fov };
     this.looking = {
       id: p.id,
@@ -1076,6 +1076,118 @@ export class DioramaView {
     return tint;
   }
 
+  // ----- fly mode (point of view) -----
+  // Arrows fly: up/down forward/back, left/right turn. Shift + arrows: left/right slide sideways, up/down rise/sink.
+  // Dragging looks around; a plain click still builds because main.js tells clicks and drags apart.
+  enterFly() {
+    if (this.flying || this.looking) return false;
+    const dir = this.controls.target.clone().sub(this.camera.position).normalize();
+    this.saved = { pos: this.camera.position.clone(), target: this.controls.target.clone(), fov: this.camera.fov };
+    const F = (this.flying = {
+      yaw: Math.atan2(-dir.x, -dir.z),
+      pitch: Math.asin(Math.max(-1, Math.min(1, dir.y))),
+      keys: new Set(),
+      shift: false,
+      last: performance.now(),
+      drag: null,
+    });
+    this.controls.enabled = false;
+    this.camera.fov = 70;
+    this.camera.updateProjectionMatrix();
+    this.camera.rotation.order = 'YXZ';
+    this.camera.rotation.set(F.pitch, F.yaw, 0);
+    F.down = (e) => {
+      F.drag = { x: e.clientX, y: e.clientY };
+      this.canvas.setPointerCapture?.(e.pointerId);
+    };
+    F.move = (e) => {
+      if (!F.drag) return;
+      F.yaw -= (e.clientX - F.drag.x) * 0.005;
+      F.pitch = Math.max(-1.5, Math.min(1.5, F.pitch - (e.clientY - F.drag.y) * 0.005));
+      F.drag = { x: e.clientX, y: e.clientY };
+      this.camera.rotation.set(F.pitch, F.yaw, 0);
+      this.dirty = true;
+      this.onFlyMove?.();
+    };
+    F.up = () => (F.drag = null);
+    const typing = (e) => e.target.closest?.('input, textarea, select') || document.querySelector('dialog[open]');
+    F.keydown = (e) => {
+      if (!e.key.startsWith('Arrow') || typing(e)) return;
+      e.preventDefault();
+      F.shift = e.shiftKey;
+      F.keys.add(e.key);
+    };
+    F.keyup = (e) => {
+      F.shift = e.shiftKey;
+      F.keys.delete(e.key);
+    };
+    F.blur = () => F.keys.clear();
+    this.canvas.addEventListener('pointerdown', F.down);
+    this.canvas.addEventListener('pointermove', F.move);
+    this.canvas.addEventListener('pointerup', F.up);
+    this.canvas.addEventListener('pointercancel', F.up);
+    window.addEventListener('keydown', F.keydown);
+    window.addEventListener('keyup', F.keyup);
+    window.addEventListener('blur', F.blur);
+    this.dirty = true;
+    return true;
+  }
+
+  // Called every frame while flying.
+  updateFly() {
+    const F = this.flying;
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - F.last) / 1000);
+    F.last = now;
+    if (!F.keys.size) return;
+    const shift = F.shift;
+    const a = (k) => (F.keys.has(k) ? 1 : 0);
+    const fwd = a('ArrowUp') - a('ArrowDown');
+    const side = a('ArrowRight') - a('ArrowLeft');
+    const pos = this.camera.position;
+    if (shift) {
+      // slide sideways and rise/sink
+      pos.x += Math.cos(F.yaw) * side * 8 * dt;
+      pos.z += -Math.sin(F.yaw) * side * 8 * dt;
+      pos.y += fwd * 6 * dt;
+    } else {
+      F.yaw -= side * 1.9 * dt;
+      pos.x += -Math.sin(F.yaw) * fwd * 8 * dt;
+      pos.z += -Math.cos(F.yaw) * fwd * 8 * dt;
+    }
+    const lim = this.world.size / 2 + 12;
+    pos.x = Math.max(-lim, Math.min(lim, pos.x));
+    pos.z = Math.max(-lim, Math.min(lim, pos.z));
+    pos.y = Math.max(0.6, Math.min(this.world.height + 8, pos.y));
+    this.camera.rotation.set(F.pitch, F.yaw, 0);
+    this.dirty = true;
+    this.onFlyMove?.();
+  }
+
+  // Leaves the camera where it is and hands it back to the orbit controls.
+  exitFly() {
+    const F = this.flying;
+    if (!F) return false;
+    this.canvas.removeEventListener('pointerdown', F.down);
+    this.canvas.removeEventListener('pointermove', F.move);
+    this.canvas.removeEventListener('pointerup', F.up);
+    this.canvas.removeEventListener('pointercancel', F.up);
+    window.removeEventListener('keydown', F.keydown);
+    window.removeEventListener('keyup', F.keyup);
+    window.removeEventListener('blur', F.blur);
+    this.flying = null;
+    const dir = new THREE.Vector3(-Math.sin(F.yaw) * Math.cos(F.pitch), Math.sin(F.pitch), -Math.cos(F.yaw) * Math.cos(F.pitch));
+    const t = this.camera.position.clone().addScaledVector(dir, 12);
+    this.camera.rotation.order = 'XYZ';
+    this.camera.fov = this.saved.fov;
+    this.camera.updateProjectionMatrix();
+    this.controls.target.set(t.x, Math.max(0, t.y), t.z);
+    this.controls.enabled = true;
+    this.controls.update();
+    this.dirty = true;
+    return true;
+  }
+
   // ----- camera -----
   resetCamera() {
     this.dirty = true;
@@ -1115,7 +1227,8 @@ export class DioramaView {
     t.z = Math.max(-lim, Math.min(lim, t.z));
     t.y = Math.max(0, Math.min(this.world.height, t.y));
     if (this.flowWaiting) this.updateFlowReveal();
-    const moved = this.looking ? false : this.controls.update(); // the camera is driven by the person view while looking
+    if (this.flying) this.updateFly();
+    const moved = this.looking || this.flying ? false : this.controls.update(); // the camera is driven by the person view / fly mode
     if (moved || this.dirty) {
       this.dirty = false;
       this.renderer.render(this.scene, this.camera);

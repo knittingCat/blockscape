@@ -559,6 +559,18 @@ function startLooking(id) {
   $('#lookBar').hidden = false;
 }
 
+function toggleFly() {
+  if (view.flying) {
+    view.exitFly();
+    $('#flyBar').hidden = true;
+    $('#flyBtn').classList.remove('active');
+  } else if (view.enterFly()) {
+    $('#flyBar').hidden = false;
+    $('#flyBtn').classList.add('active');
+  } else toast('Finish looking through the person first.');
+  refreshHover();
+}
+
 function stopLooking() {
   const r = view.exitPerson();
   $('#lookBar').hidden = true;
@@ -1033,14 +1045,19 @@ function wireUI() {
   });
 
   $('#lookDone').onclick = stopLooking;
+  $('#flyBtn').onclick = toggleFly;
+  $('#flyDone').onclick = toggleFly;
+  view.onFlyMove = () => refreshHover();
   $('#lookMatch').onclick = () => view.matchHeadToBody();
   window.addEventListener('keydown', (e) => {
     if (view.looking) {
       if (e.key === 'Escape' || e.key === 'Enter') stopLooking();
       return;
     }
-    if (isViewOnly()) return;
     if (e.target.closest?.('input, textarea, select') || document.querySelector('dialog[open]')) return;
+    if (view.flying && e.key === 'Escape') return toggleFly();
+    if (e.key.toLowerCase() === 'f' && !e.metaKey && !e.ctrlKey && !e.altKey) return toggleFly();
+    if (isViewOnly()) return;
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
     if (mod && key === 'z') {

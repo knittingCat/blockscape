@@ -19,6 +19,7 @@ Live site: https://blockscape.onrender.com
 **People**
 - Add a person, then change their skin, hair, hat, top, bottoms, shoes and name.
 - Pose them standing or lying down, turn the whole person and the head separately, and move them.
+- Fly mode (eye button or F): up/down arrows fly forward/back, left/right turn, Shift + left/right slide sideways, Shift + up/down rise and sink, dragging looks around. All tools and shortcuts keep working, so you can build while flying; Esc or F stops.
 - Look through their eyes: arrows walk, Shift + left/right spins around, Shift + up lies face down (or gets up), Shift + down lies on the back (or gets up), dragging turns the head, the Head straight button matches the head to the body, Esc finishes. The person ends up wherever you left them.
 
 **Share**

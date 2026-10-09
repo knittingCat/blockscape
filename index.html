@@ -23,6 +23,7 @@
       <button aria-label="Copy" id="copyBtn" title="Copy the selected area again (C or Cmd/Ctrl+C) — selecting already copies it"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
       <button aria-label="Paste" data-tool="paste" title="Paste: choose the footprint, then click to place it (V or Cmd/Ctrl+V)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button>
       <button aria-label="Mirror" id="mirrorBtn" title="Mirror the copied structure left-to-right (M)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/><path d="M12 20v2"/><path d="M12 14v2"/><path d="M12 8v2"/><path d="M12 2v2"/></svg></button>
+      <button aria-label="Fly" id="flyBtn" title="Fly around in first person (F): arrows fly and turn, Shift + arrows slide and rise; you can still build"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
       <button aria-label="Symmetry" id="symBtn" title="Build symmetrically: click to cycle off, left-right, front-back, both (Y)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20" stroke-dasharray="3 3"/><rect x="3" y="6" width="6" height="12" rx="1"/><rect x="15" y="6" width="6" height="12" rx="1"/></svg></button>
     </div>
     <div class="group">
@@ -65,6 +66,10 @@
     <span>Arrows: walk. Shift + left/right: spin around. Shift + up: lie face down (or get up). Shift + down: lie on your back (or get up). Drag: turn your head. Head straight: match the head to the body. Esc: finish.</span>
     <button id="lookMatch" type="button">Head straight</button>
     <button id="lookDone" type="button" class="primary">Done</button>
+  </div>
+  <div id="flyBar" hidden>
+    <span>Fly: up/down arrows go forward/back, left/right turn. Shift + left/right slide, Shift + up/down rise/sink. Drag to look. You can still build. Esc or F: stop.</span>
+    <button id="flyDone" type="button" class="primary">Done</button>
   </div>
   <div id="status" aria-live="polite"></div>
   <div id="toast" role="status"></div>
@@ -126,6 +131,7 @@
         <li><b>Copy a block:</b> Pick takes the block you click on.</li>
         <li><b>Copy and paste:</b> Select — click one corner, then the opposite corner; it is copied automatically. Then Paste: a green footprint follows your pointer — move it where you want, click to place it, Rotate (or Q) to turn it and Mirror (or M) to flip it left-to-right. Click Done or press Esc when finished. With an area selected, press <b>Delete</b> to remove everything in it.</li>
         <li><b>Build symmetrically:</b> click the Symmetry icon (or press Y) to cycle off, left-right, front-back and both. Everything you place, remove or fill is repeated on the other side of the blue line.</li>
+        <li><b>Fly (point of view):</b> the eye button (or F) lets you fly around: up/down arrows go forward and back, left/right arrows turn, Shift + left/right slide sideways, Shift + up/down rise and sink, dragging looks around. Building works the same while you fly. Esc or F stops.</li>
         <li><b>People:</b> the Person tool (or H) puts a figure where you click and opens a window to change their hair, hat, shirt, pants, shoes and name. Click a person in any tool to change them later (Move picks them up and puts them somewhere else; Look through their eyes: arrows walk, Shift + left/right spins them around, Shift + up lies them face down or gets them up, Shift + down lies them on their back or gets them up, dragging turns the head, Head straight matches the head to the body, Esc finishes). Right-click removes one.</li>
         <li><b>Classes:</b> in the Gallery you can join a class with the code from your teacher, or start your own class and give out its code. When you Save, choose "In a class gallery" to share with just that class.</li>
         <li><b>Name things:</b> Sign puts floating text in your scene.</li>
