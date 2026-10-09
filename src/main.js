@@ -126,7 +126,6 @@ let cloud = null; // the saved-online diorama we are looking at, if any
 let openStartPicker = () => {}; // opens the starting-scene picker for a first visit
 let booted = false; // false until the first-visit sequence has finished
 let signedInDuringBoot = false;
-let startedFresh = false; // true when nothing was saved here, so the visitor starts from a blank grass field
 const SYMMETRY_MODES = ['off', 'x', 'z', 'xz'];
 const SYMMETRY_NAMES = { off: 'off', x: 'left-right', z: 'front-back', xz: 'both ways' };
 let symmetry = 'off'; // build symmetrically: every place/erase/box is repeated across the middle
@@ -1125,7 +1124,6 @@ async function loadStart(allowHash = true) {
       return;
     } catch {}
   }
-  startedFresh = true;
   // ?scene=forest starts from another template (handy for screenshots); normally a plain grass field
   const sceneKind = new URLSearchParams(location.search).get('scene');
   await loadFromText(await encodeWorld(makeScene(32, ['grass', 'grassTree', 'forest', 'island', 'empty'].includes(sceneKind) ? sceneKind : 'grass')));
@@ -1221,10 +1219,7 @@ async function main() {
   }
   if (location.search.includes('startpicker')) openStartPicker(); // dev: always show the picker (screenshots)
   else if (signedInDuringBoot) openStartPicker();
-  else if (startedFresh && !store.get('seen-start') && !location.search.includes('nohelp') && !location.hash.startsWith('#s=') && !location.hash.startsWith('#d=')) {
-    store.set('seen-start', '1');
-    openStartPicker();
-  }
+  else if (!location.search.includes('nohelp') && !location.hash.startsWith('#s=') && !location.hash.startsWith('#d=')) openStartPicker();
   booted = true;
   window.blockscape = { get world() { return world; }, get view() { return view; }, setTool, selectBlock, loadFromText, composePicture };
 }
