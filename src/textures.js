@@ -171,13 +171,21 @@ const PAINTERS = {
   },
 };
 
+function paintPlanks(ctx, r, rgb) {
+  noise(ctx, r, rgb, 16);
+  const dark = rgb.map((v) => Math.round(v * 0.68));
+  const light = rgb.map((v) => Math.min(255, Math.round(v * 0.85 + 20)));
+  for (const y of [3, 7, 11, 15]) for (let x = 0; x < N; x++) px(ctx, x, y, dark);
+  speckles(ctx, r, light, 12);
+}
+
 function paintWool(ctx, r, rgb) {
   noise(ctx, r, rgb, 16);
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if ((x + y) % 4 === 0) px(ctx, x, y, [0, 0, 0], 0.07);
 }
 
 const cache = new Map();
-// Returns a 16x16 <canvas> for a texture name (e.g. "stone" or "wool:236,236,236").
+// Returns a 16x16 <canvas> for a texture name (e.g. "stone", "wool:236,236,236" or "planks:178,52,48").
 export function textureCanvas(name) {
   if (cache.has(name)) return cache.get(name);
   const canvas = document.createElement('canvas');
@@ -185,6 +193,7 @@ export function textureCanvas(name) {
   const ctx = canvas.getContext('2d');
   const r = rng(name);
   if (name.startsWith('wool:')) paintWool(ctx, r, name.slice(5).split(',').map(Number));
+  else if (name.startsWith('planks:')) paintPlanks(ctx, r, name.slice(7).split(',').map(Number));
   else PAINTERS[name](ctx, r);
   cache.set(name, canvas);
   return canvas;

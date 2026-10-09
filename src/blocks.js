@@ -29,6 +29,13 @@ export const BLOCKS = [
   { id: 26, name: 'Pink wool', tex: 'wool:237,141,172' },
   { id: 27, name: 'Brown wool', tex: 'wool:114,71,40' },
   { id: 28, name: 'Black wool', tex: 'wool:29,29,33' },
+  { id: 29, name: 'Red planks', tex: 'planks:178,52,48' },
+  { id: 30, name: 'Orange planks', tex: 'planks:214,112,40' },
+  { id: 31, name: 'Yellow planks', tex: 'planks:226,190,60' },
+  { id: 32, name: 'Green planks', tex: 'planks:80,150,60' },
+  { id: 33, name: 'Blue planks', tex: 'planks:58,100,190' },
+  { id: 34, name: 'Indigo planks', tex: 'planks:68,60,150' },
+  { id: 35, name: 'Violet planks', tex: 'planks:140,70,170' },
 ];
 
 export const BLOCK_BY_ID = new Map(BLOCKS.map((b) => [b.id, b]));
