@@ -50,6 +50,7 @@ export class DioramaView {
       const base = this.zoomGoal ?? d;
       this.zoomGoal = Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, base * Math.pow(0.95, -step * 0.01)));
     }, { passive: false, capture: true });
+    this.controls.addEventListener('start', () => { this.zoomGoal = null; }); // touch/mouse drags and pinches take over from a wheel ease
     this.controls.maxPolarAngle = Math.PI / 2 - 0.03;
     this.controls.autoRotateSpeed = 1.6;
 
