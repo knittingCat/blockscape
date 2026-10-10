@@ -38,7 +38,6 @@ dialog h2 { margin: 0 0 .5rem; font-size: 1.2rem; }
 dialog label { display: flex; flex-direction: column; gap: .2rem; margin: .6rem 0; color: var(--muted); font-size: .88rem; }
 dialog label.inline { flex-direction: row; align-items: center; gap: .5rem; margin: 0; }
 dialog input[type=text], dialog input:not([type]), dialog select { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .45rem .6rem; color: var(--text); width: 100%; }
-dialog input[type=checkbox] { width: auto; }
 dialog .row { display: flex; justify-content: flex-start; gap: .5rem; margin-top: 1rem; }
 dialog .row.wrap { justify-content: space-between; flex-wrap: wrap; align-items: center; }
 dialog img { width: 100%; border-radius: 10px; border: 1px solid var(--line); background: #000; display: block; }
@@ -166,3 +165,20 @@ button.danger:hover { background: var(--danger); border-color: var(--danger); co
 @media (hover: none) and (pointer: coarse) {
   #flyBtn, #flyBar { display: none !important; }
 }
+
+/* Radios and checkboxes both show a square box with a white check instead of a blue dot.
+   Radios still allow only one choice in a group. */
+input[type=radio], input[type=checkbox] {
+  appearance: none; -webkit-appearance: none; flex: 0 0 auto;
+  width: 1.15rem; height: 1.15rem; margin: 0; padding: 0;
+  border: 2px solid var(--line); border-radius: 5px; background: var(--bg);
+  display: inline-grid; place-content: center; cursor: pointer;
+}
+input[type=radio]:hover, input[type=checkbox]:hover { border-color: var(--accent); }
+input[type=radio]::after, input[type=checkbox]::after {
+  content: ''; width: .3rem; height: .6rem; margin-top: -.1rem;
+  border: solid var(--accent-text); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg) scale(0);
+}
+input[type=radio]:checked, input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+input[type=radio]:checked::after, input[type=checkbox]:checked::after { transform: rotate(45deg) scale(1); }
+input[type=radio]:focus-visible, input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
