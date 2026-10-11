@@ -4,7 +4,7 @@ Build block dioramas in your browser. Place blocks, add people and signs, switch
 
 Made for school projects like "illustrate your favourite scene from a story": build the scene, post the picture or link on the class forum, and look at classmates' dioramas in a class gallery.
 
-Live site: https://blockscape.onrender.com
+Live site: https://cubeloft.onrender.com
 
 ## What you can do
 
