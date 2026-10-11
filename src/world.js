@@ -601,7 +601,7 @@ export async function decodeWorld(text) {
   const kind = text[0];
   const body = unb64(text.slice(1));
   if (kind === 'r') return World.fromBytes(body);
-  if (kind !== 'z') throw new Error('Not a Blockscape link');
+  if (kind !== 'z') throw new Error('Not a Cubeloft link');
   if (typeof DecompressionStream !== 'function') throw new Error('This browser cannot open compressed scenes');
   return World.fromBytes(await pipe(body, new DecompressionStream('deflate-raw')));
 }

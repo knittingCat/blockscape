@@ -20,7 +20,7 @@ export async function verifySecret(secret, stored) {
 export const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 export const newToken = () => crypto.randomBytes(32).toString('hex');
 
-export const RESERVED = new Set(['admin', 'administrator', 'root', 'moderator', 'mod', 'system', 'blockscape', 'neon', 'support', 'staff']);
+export const RESERVED = new Set(['admin', 'administrator', 'root', 'moderator', 'mod', 'system', 'blockscape', 'cubeloft', 'neon', 'support', 'staff']);
 
 export function checkUsername(name) {
   if (typeof name !== 'string') return 'Pick a username.';

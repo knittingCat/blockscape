@@ -1,4 +1,4 @@
-# Blockscape
+# Cubeloft
 
 Build block dioramas in your browser. Place blocks, add people and signs, switch between day, sunset and night, then save a picture or share a link so others can look around your scene.
 
